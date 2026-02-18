@@ -1,31 +1,28 @@
-library(readr)
 library(tidymodels)
-
 tidymodels_prefer()
 
-sepsis_data <- read_csv("sepsis_data.csv")
-
-#chapter about spending our data in TMWR
 set.seed(501)
 
-#tag sepsisdatasættet og find alle unikke 
+# Lav patient-level tabel til split (1 række pr patient)
+# For hver patient, giv mig én række, og sæt SepsisLabel til den højeste værdi patienten
+#fjern gruppering med "drop"
+#
 patients <- sepsis_data %>%
-  distinct(patient_id)
+  group_by(patient_id) %>%
+  summarise(SepsisLabel = max(SepsisLabel), .groups = "drop")
 
-patient_split <- initial_split(
-  patients,
-  prop = 0.8
-)
+# Split på patient_id, 20% test 80% træning og strata på baggrund af sepsislavel
+patient_split <- initial_split(patients, prop = 0.8, strata = SepsisLabel)
 
+# kæd til datasæt
 train_patients <- training(patient_split)
 test_patients  <- testing(patient_split)
 
-#ChatGPT suggestion(
-
+# koble id tilbage sammen med data med semi_join
+# chatgpt suggestion()
 train_data <- sepsis_data %>%
   semi_join(train_patients, by = "patient_id")
 
 test_data <- sepsis_data %>%
   semi_join(test_patients, by = "patient_id")
-
 #)
