@@ -2,12 +2,12 @@ library(tidyverse)
 
 #https://www.geeksforgeeks.org/r-language/read-all-files-in-directory-using-r/
 #list.files finder alle filerne i mappen med path=x, full.names = true betyder at den returnere hele filstien på filen
-traning_set_a <- list.files(path="D:/physionet_training/training/training_setA", full.names = TRUE)
-traning_set_b <- list.files(path="D:/physionet_training/training/training_setB", full.names = TRUE)
+training_set_a <- list.files(path="D:/physionet_training/training/training_setA", full.names = TRUE)
+training_set_b <- list.files(path="D:/physionet_training/training/training_setB", full.names = TRUE)
 
 #https://www.statology.org/combine-lists-in-r/
 #c() combinere de to lister af paths(filer/patienter)
-total_dataset <- c(traning_set_a, traning_set_b)
+total_dataset <- c(training_set_a, training_set_b)
 
 #https://rstudio.github.io/cheatsheets/html/data-import.html
 #opretter en function der tager en variabel der hedder path som input
