@@ -1,4 +1,5 @@
 library(tidyverse)
+library(tidymodels)
 library(ggcorrplot)
 library(mde)
 #--------- test data loading --------------------
@@ -90,5 +91,82 @@ iteration1_ffill <- iteration1 %>%
   group_by(patient_id) %>%
   fill(everything(), .direction = "down") %>%   # forward-fill
   ungroup()
-missing_summary <- percent_missing(df_imp)
+missing_summary <- percent_missing(iteration1_ffill)
 #--------------------------------------------------
+
+iteration1_mean_impute <- iteration1_ffill %>%
+  mutate(across(
+    where(is.numeric),
+    ~ if_else(is.na(.x), mean(.x, na.rm = TRUE), .x)
+  ))
+missing_summary <- percent_missing(iteration1_mean_impute)
+
+
+
+#---------------------------------------------------------
+#----------------recipe----------------------------------
+#---------------------------------------------------------
+excluded_variables <- c(
+  "SBP",
+  "DBP",
+  "TroponinI",
+  "EtCO2",
+  "FiO2",
+  "PaCO2",
+  "SaO2",
+  "BaseExcess",
+  "HCO3",
+  "pH",
+  "Lactate",
+  "Chloride",
+  "Phosphate",
+  "Magnesium",
+  "Calcium",
+  "AST",
+  "Alkalinephos",
+  "Bilirubin_direct",
+  "Bilirubin_total",
+  "PTT",
+  "Fibrinogen",
+  "Unit1",
+  "Unit2"
+)
+
+ffill_dataset <- function(df) {
+  df %>%
+    arrange(patient_id, ICULOS) %>%
+    group_by(patient_id) %>%
+    fill(-patient_id, -ICULOS, .direction = "down") %>%   # forward-fill
+    ungroup()
+}
+
+add_indicator_columns <- function(df, outcome = "SepsisLabel") {
+  protected <- c("patient_id", "ICULOS", outcome)
+  
+  df %>%
+    mutate(across(
+      -any_of(protected),
+      ~ as.integer(is.na(.x)),
+      .names = "was_na_{.col}"
+    ))
+}
+
+train_preprocess_ffill <- train %>%
+  select(-any_of(excluded_variables)) %>%
+  add_indicator_columns(outcome = "SepsisLabel") %>%
+  ffill_dataset()
+
+test_preprocess_ffill <- test %>%
+  select(-any_of(excluded_variables)) %>%
+  add_indicator_columns(outcome = "SepsisLabel") %>%
+  ffill_dataset()
+
+sepsis_recipe <- recipe(SepsisLabel~.,data = train_preprocess_ffill) %>%
+  step_meanimpute(all_numeric_predictors()) %>%
+  #step_corr(all_numeric(), threshold = 0.9) %>% Comment out because it will remove hct hgb, we are considering compositevariable
+  #step_log() Datacamp course does this, we want to explore different transformations
+  step_normalize(all_numeric_predictors())
+  
+  
+
+  
