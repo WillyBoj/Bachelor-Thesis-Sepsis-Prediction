@@ -153,12 +153,14 @@ sepsis_results
 
 
 #Evalutation --------------------------------------------------
-library(DescTools)
-BrierScore(sepsis_results$SepsisLabel == "1", sepsis_results$.pred_1)
+# library(DescTools)
+# BrierScore(sepsis_results$SepsisLabel == "1", sepsis_results$.pred_1)
+
+sepsis_results$SepsisLabel <- factor(sepsis_results$SepsisLabel, levels = c("1", "0")) #yardstick fix https://github.com/tidymodels/yardstick/issues/515
 
 prediction_eval <- metric_set(roc_auc, brier_class)
 
-prediction_eval(sepsis_results, truth = SepsisLabel, .pred_1, event_level = "second")
+prediction_eval(sepsis_results, truth = SepsisLabel, .pred_1, event_level = "first")
 
 conf_mat(sepsis_results, truth = SepsisLabel, .pred_class)
 
