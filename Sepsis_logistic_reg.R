@@ -4,7 +4,6 @@ library(ggcorrplot)
 library(slider)
 #exclusion of variables --------------------------------------------------------
 excluded_variables <- c(
-  "SBP",
   "DBP",
   "TroponinI",
   "EtCO2",
@@ -66,13 +65,15 @@ add_rolling_features <- function(df) {
       HR_roll_mean_6   = slide_dbl(HR,   ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
       Temp_roll_mean_6 = slide_dbl(Temp, ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
       Resp_roll_mean_6 = slide_dbl(Resp, ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+      MAP_roll_mean_6  = slide_dbl(MAP,   ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
       
       HR_roll_max_6    = slide_dbl(HR,   ~ifelse(all(is.na(.x)), NA_real_, max(.x, na.rm = TRUE)), .before = 5, .complete = FALSE),
       Temp_roll_max_6  = slide_dbl(Temp, ~ifelse(all(is.na(.x)), NA_real_, max(.x, na.rm = TRUE)), .before = 5, .complete = FALSE),
       
       HR_delta_3       = replace_na(HR   - lag(HR, 3),   0),
       Temp_delta_3     = replace_na(Temp - lag(Temp, 3), 0),
-      Resp_delta_3     = replace_na(Resp - lag(Resp, 3), 0)
+      Resp_delta_3     = replace_na(Resp - lag(Resp, 3), 0),
+      MAP_delta_3      = replace_na(MAP   - lag(MAP, 3),   0),
     ) %>%
     ungroup()
 }
@@ -98,7 +99,7 @@ test_preprocess_ffill <- test %>%
   mutate(SepsisLabel = as.factor(SepsisLabel))%>%        #making sure
   mutate(Gender = as.factor(Gender))
 
-train_preprocess_ffill %>% count(SepsisLabel)
+#train_preprocess_ffill %>% count(SepsisLabel)
 
 #--------------------------------------------------------
 #----------------recipe----------------------------------
@@ -107,7 +108,10 @@ train_preprocess_ffill %>% count(SepsisLabel)
 sepsis_recipe_log <- recipe(SepsisLabel ~ ., data = train_preprocess_ffill) %>%
   step_rm(patient_id) %>%
   step_dummy(Gender) %>% 
-  step_impute_mean(all_numeric_predictors())
+  step_impute_mean(all_numeric_predictors()) %>%
+  step_mutate(shock_index = HR/SBP) %>%
+  step_mutate(SIRS_score = (HR > 90) + (Temp > 38 | Temp < 36) + (Resp > 20) + (WBC > 12 | WBC < 4)) %>%  #creates new column with sirs scores based on the true arguments
+  step_corr(threshold = 0.8)
 
 #Model - mode and Engine---------------------------------
 
@@ -161,9 +165,5 @@ sepsis_results$SepsisLabel <- factor(sepsis_results$SepsisLabel, levels = c("1",
 prediction_eval <- metric_set(roc_auc, brier_class)
 
 prediction_eval(sepsis_results, truth = SepsisLabel, .pred_1, event_level = "first")
-
-conf_mat(sepsis_results, truth = SepsisLabel, .pred_class)
-
-
 #-----------------------------------------------------------
 
