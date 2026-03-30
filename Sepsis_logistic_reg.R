@@ -62,18 +62,24 @@ add_rolling_features <- function(df) {
     arrange(patient_id, ICULOS) %>%
     group_by(patient_id) %>%
     mutate(
+      # 6h means
       HR_roll_mean_6   = slide_dbl(HR,   ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
       Temp_roll_mean_6 = slide_dbl(Temp, ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
       Resp_roll_mean_6 = slide_dbl(Resp, ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
-      MAP_roll_mean_6  = slide_dbl(MAP,   ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+      MAP_roll_mean_6  = slide_dbl(MAP,  ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+    
+      # change in variable over the past 3 hours
+      HR_delta_3   = replace_na(HR   - lag(HR, 3),   0),
+      Temp_delta_3 = replace_na(Temp - lag(Temp, 3), 0),
+      Resp_delta_3 = replace_na(Resp - lag(Resp, 3), 0),
+      MAP_delta_3  = replace_na(MAP  - lag(MAP, 3),  0),
       
-      HR_roll_max_6    = slide_dbl(HR,   ~ifelse(all(is.na(.x)), NA_real_, max(.x, na.rm = TRUE)), .before = 5, .complete = FALSE),
-      Temp_roll_max_6  = slide_dbl(Temp, ~ifelse(all(is.na(.x)), NA_real_, max(.x, na.rm = TRUE)), .before = 5, .complete = FALSE),
+      # 6h rolling sd window
+      HR_roll_sd_6   = slide_dbl(HR,   ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+      MAP_roll_sd_6  = slide_dbl(MAP,  ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+      Resp_roll_sd_6 = slide_dbl(Resp, ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+      Temp_roll_sd_6 = slide_dbl(Temp, ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE)
       
-      HR_delta_3       = replace_na(HR   - lag(HR, 3),   0),
-      Temp_delta_3     = replace_na(Temp - lag(Temp, 3), 0),
-      Resp_delta_3     = replace_na(Resp - lag(Resp, 3), 0),
-      MAP_delta_3      = replace_na(MAP   - lag(MAP, 3),   0),
     ) %>%
     ungroup()
 }
