@@ -115,7 +115,7 @@ sepsis_recipe_log <- recipe(SepsisLabel ~ ., data = train_preprocess_ffill) %>%
   step_rm(patient_id) %>%
   step_dummy(Gender) %>% 
   step_impute_mean(all_numeric_predictors()) %>%
-  step_mutate(shock_index = HR/SBP) %>%
+  #step_mutate(shock_index = HR/SBP) %>%
   step_mutate(SIRS_score = (HR > 90) + (Temp > 38 | Temp < 36) + (Resp > 20) + (WBC > 12 | WBC < 4)) %>%  #creates new column with sirs scores based on the true arguments
   step_corr(threshold = 0.8)
 
