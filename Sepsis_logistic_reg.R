@@ -7,13 +7,11 @@ excluded_variables <- c(
   "DBP",
   "TroponinI",
   "EtCO2",
-  "FiO2",
   "PaCO2",
   "SaO2",
   "BaseExcess",
   "HCO3",
   "pH",
-  "Lactate",
   "Chloride",
   "Calcium",
   "Magnesium",
@@ -56,34 +54,63 @@ add_indicator_columns <- function(df, outcome = "SepsisLabel") {
 
 #------------------------------------------------------------------------
 #defining add rolling features to dataset function -----------------------
+add_obs_count_features <- function(df) {
+  df %>%
+    arrange(patient_id, ICULOS) %>%
+    group_by(patient_id) %>%
+    mutate(
+      HR_obs_6h          = slide_int(HR,         ~sum(!is.na(.x)), .before = 5,  .complete = FALSE),
+      Temp_obs_6h        = slide_int(Temp,       ~sum(!is.na(.x)), .before = 5,  .complete = FALSE),
+      Resp_obs_6h        = slide_int(Resp,       ~sum(!is.na(.x)), .before = 5,  .complete = FALSE),
+      MAP_obs_6h         = slide_int(MAP,        ~sum(!is.na(.x)), .before = 5,  .complete = FALSE),
+      FiO2_obs_6h         = slide_int(FiO2,        ~sum(!is.na(.x)), .before = 5,  .complete = FALSE),
+      Lactate_obs_6h         = slide_int(Lactate,        ~sum(!is.na(.x)), .before = 5,  .complete = FALSE),
+      SBP_obs_6h         = slide_int(SBP,        ~sum(!is.na(.x)), .before = 5,  .complete = FALSE),
+      
+      HR_obs_12h         = slide_int(HR,         ~sum(!is.na(.x)), .before = 11, .complete = FALSE),
+      Temp_obs_12h       = slide_int(Temp,       ~sum(!is.na(.x)), .before = 11, .complete = FALSE),
+      FiO2_obs_12h         = slide_int(FiO2,        ~sum(!is.na(.x)), .before = 11,  .complete = FALSE),
+      Lactate_obs_12h         = slide_int(Lactate,        ~sum(!is.na(.x)), .before = 11,  .complete = FALSE),
+      
+      total_obs_6h       = HR_obs_6h + Temp_obs_6h + Resp_obs_6h + MAP_obs_6h + FiO2_obs_6h + Lactate_obs_6h + SBP_obs_6h ) %>%
+    ungroup()
+}
+
 
 add_rolling_features <- function(df) {
   df %>%
     arrange(patient_id, ICULOS) %>%
     group_by(patient_id) %>%
     mutate(
-      # 6h means
       HR_roll_mean_6   = slide_dbl(HR,   ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
       Temp_roll_mean_6 = slide_dbl(Temp, ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
       Resp_roll_mean_6 = slide_dbl(Resp, ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
       MAP_roll_mean_6  = slide_dbl(MAP,  ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
-    
-      # change in variable over the past 3 hours
-      HR_delta_3   = replace_na(HR   - lag(HR, 3),   0),
-      Temp_delta_3 = replace_na(Temp - lag(Temp, 3), 0),
-      Resp_delta_3 = replace_na(Resp - lag(Resp, 3), 0),
-      MAP_delta_3  = replace_na(MAP  - lag(MAP, 3),  0),
+      Lactate_roll_mean_6  = slide_dbl(Lactate,  ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+      FiO2_roll_mean_6  = slide_dbl(FiO2,  ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+      Platelets_roll_mean_6  = slide_dbl(Platelets,  ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+      Creatinine_roll_mean_6  = slide_dbl(Creatinine,  ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
       
-      # 6h rolling sd window
+      
+      HR_roll_mean_12   = slide_dbl(HR,   ~mean(.x, na.rm = TRUE), .before = 11, .complete = FALSE),
+      Temp_roll_mean_12 = slide_dbl(Temp, ~mean(.x, na.rm = TRUE), .before = 11, .complete = FALSE),
+      Resp_roll_mean_12 = slide_dbl(Resp, ~mean(.x, na.rm = TRUE), .before = 11, .complete = FALSE),
+      MAP_roll_mean_12  = slide_dbl(MAP,  ~mean(.x, na.rm = TRUE), .before = 11, .complete = FALSE),
+      Lactate_roll_mean_12  = slide_dbl(Lactate,  ~mean(.x, na.rm = TRUE), .before = 11, .complete = FALSE),
+      FiO2_roll_mean_12  = slide_dbl(FiO2,  ~mean(.x, na.rm = TRUE), .before = 11, .complete = FALSE),
+      
       HR_roll_sd_6   = slide_dbl(HR,   ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
       MAP_roll_sd_6  = slide_dbl(MAP,  ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
       Resp_roll_sd_6 = slide_dbl(Resp, ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
-      Temp_roll_sd_6 = slide_dbl(Temp, ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE)
+      Temp_roll_sd_6 = slide_dbl(Temp, ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+      Lactate_roll_sd_6   = slide_dbl(Lactate,   ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+      FiO2_roll_sd_6   = slide_dbl(FiO2,   ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+      Platelets_roll_sd_6  = slide_dbl(Platelets,  ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+      Creatinine_roll_sd_6  = slide_dbl(Creatinine,  ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE)
       
     ) %>%
     ungroup()
 }
-
 #------------------------------------------------------------------------
 
 #Applying the function to preprocessing of the training and test dataset
@@ -91,6 +118,7 @@ add_rolling_features <- function(df) {
 train_preprocess_ffill <- train %>%                    
   select(-any_of(excluded_variables)) %>%                 #removing excluded variables
   add_indicator_columns(outcome = "SepsisLabel") %>%      #adding missing data indicators
+  add_obs_count_features() %>% 
   ffill_dataset() %>%                                     #Forward filling the missing data
   add_rolling_features() %>%                              #adding rolling features
   mutate(SepsisLabel = as.factor(SepsisLabel)) %>%        #making sure
@@ -100,6 +128,7 @@ train_preprocess_ffill <- train %>%
 test_preprocess_ffill <- test %>%
   select(-any_of(excluded_variables)) %>%
   add_indicator_columns(outcome = "SepsisLabel") %>%
+  add_obs_count_features() %>% 
   ffill_dataset() %>%
   add_rolling_features() %>% 
   mutate(SepsisLabel = as.factor(SepsisLabel))%>%        #making sure
