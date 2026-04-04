@@ -52,8 +52,11 @@ add_indicator_columns <- function(df, outcome = "SepsisLabel") {
     ))
 }
 
+# Counts how many times each variable was measured in the last 6 and 12 hours.
+# Few measurements may indicate a less monitored or more stable patient.
 #------------------------------------------------------------------------
-#defining add rolling features to dataset function -----------------------
+
+
 add_obs_count_features <- function(df) {
   df %>%
     arrange(patient_id, ICULOS) %>%
@@ -76,6 +79,9 @@ add_obs_count_features <- function(df) {
     ungroup()
 }
 
+
+#------------------------------------------------------------------------
+#defining add rolling features to dataset function -----------------------
 
 add_rolling_features <- function(df) {
   df %>%
@@ -172,17 +178,20 @@ Logistic_sepsis_fit <- logistic_sepsis_model %>%
   fit(SepsisLabel~., data = Sepsis_log_training_prep)
 
 #-----------------------------------------------------------
-
 #preparing preditions --------------------------------------------------------
+
 Class_preds_sepsis <- predict(Logistic_sepsis_fit, new_data = Sepsis_log_test_prep, type = "class")
 
-prob_preds_sepsis <- predict(Logistic_sepsis_fit, new_data = Sepsis_log_test_prep, type = "prob")
-#-----------------------------------------------------------
 
+prob_preds_sepsis <- predict(Logistic_sepsis_fit, new_data = Sepsis_log_test_prep, type = "prob")
+
+#-----------------------------------------------------------
 #Results of the model --------------------------------------
+
 sepsis_results <- test_preprocess_ffill %>%
   select(SepsisLabel) %>%
-  bind_cols(Class_preds_sepsis, prob_preds_sepsis)
+  bind_cols(class_preds, prob_preds) %>%
+  mutate(SepsisLabel = factor(SepsisLabel, levels = c("1", "0")))
 
 sepsis_results
 #-----------------------------------------------------------
@@ -194,8 +203,6 @@ sepsis_results
 #Evalutation --------------------------------------------------
 # library(DescTools)
 # BrierScore(sepsis_results$SepsisLabel == "1", sepsis_results$.pred_1)
-
-sepsis_results$SepsisLabel <- factor(sepsis_results$SepsisLabel, levels = c("1", "0")) #yardstick fix https://github.com/tidymodels/yardstick/issues/515
 
 prediction_eval <- metric_set(roc_auc, brier_class)
 
