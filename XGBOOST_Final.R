@@ -6,8 +6,7 @@ library(slider)
 
 excluded_variables <- c(
   "DBP", "TroponinI", "EtCO2", "PaCO2", "SaO2", "BaseExcess",
-  "HCO3", "pH", "Chloride", "Calcium", "Magnesium", "Hct",
-  "Phosphate", "AST", "Alkalinephos", "Bilirubin_direct", "Bilirubin_total",
+  "HCO3", "Hct", "AST", "Alkalinephos", "Bilirubin_direct", "Bilirubin_total",
   "PTT", "Fibrinogen", "Unit1", "Unit2"
 )
 #------------------------------------------------------------------------
