@@ -11,12 +11,7 @@ excluded_variables <- c(
   "SaO2",
   "BaseExcess",
   "HCO3",
-  "pH",
-  "Chloride",
-  "Calcium",
-  "Magnesium",
   "Hct",
-  "Phosphate",
   "AST",
   "Alkalinephos",
   "Bilirubin_direct",
@@ -180,7 +175,7 @@ Logistic_sepsis_fit <- logistic_sepsis_model %>%
 #-----------------------------------------------------------
 #preparing preditions --------------------------------------------------------
 
-Class_preds_sepsis <- predict(Logistic_sepsis_fit, new_data = Sepsis_log_test_prep, type = "class")
+class_preds_sepsis <- predict(Logistic_sepsis_fit, new_data = Sepsis_log_test_prep, type = "class")
 
 
 prob_preds_sepsis <- predict(Logistic_sepsis_fit, new_data = Sepsis_log_test_prep, type = "prob")
@@ -190,7 +185,7 @@ prob_preds_sepsis <- predict(Logistic_sepsis_fit, new_data = Sepsis_log_test_pre
 
 sepsis_results <- test_preprocess_ffill %>%
   select(SepsisLabel) %>%
-  bind_cols(class_preds, prob_preds) %>%
+  bind_cols(class_preds_sepsis, prob_preds_sepsis) %>%
   mutate(SepsisLabel = factor(SepsisLabel, levels = c("1", "0")))
 
 sepsis_results
