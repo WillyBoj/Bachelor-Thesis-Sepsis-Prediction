@@ -57,61 +57,79 @@ add_obs_count_features <- function(df) {
     arrange(patient_id, ICULOS) %>%
     group_by(patient_id) %>%
     mutate(
-      HR_obs_6h          = slide_int(HR,         ~sum(!is.na(.x)), .before = 5,  .complete = FALSE),
-      Temp_obs_6h        = slide_int(Temp,       ~sum(!is.na(.x)), .before = 5,  .complete = FALSE),
-      Resp_obs_6h        = slide_int(Resp,       ~sum(!is.na(.x)), .before = 5,  .complete = FALSE),
-      MAP_obs_6h         = slide_int(MAP,        ~sum(!is.na(.x)), .before = 5,  .complete = FALSE),
-      FiO2_obs_6h         = slide_int(FiO2,        ~sum(!is.na(.x)), .before = 5,  .complete = FALSE),
-      Lactate_obs_6h         = slide_int(Lactate,        ~sum(!is.na(.x)), .before = 5,  .complete = FALSE),
-      SBP_obs_6h         = slide_int(SBP,        ~sum(!is.na(.x)), .before = 5,  .complete = FALSE),
+      HR_obs_6h       = slide_int(HR,      ~sum(!is.na(.x)), .before = 5,  .complete = FALSE),
+      Temp_obs_6h     = slide_int(Temp,    ~sum(!is.na(.x)), .before = 5,  .complete = FALSE),
+      Resp_obs_6h     = slide_int(Resp,    ~sum(!is.na(.x)), .before = 5,  .complete = FALSE),
+      MAP_obs_6h      = slide_int(MAP,     ~sum(!is.na(.x)), .before = 5,  .complete = FALSE),
+      SBP_obs_6h      = slide_int(SBP,     ~sum(!is.na(.x)), .before = 5,  .complete = FALSE),
+      WBC_obs_6h      = slide_int(WBC,     ~sum(!is.na(.x)), .before = 5,  .complete = FALSE),
       
-      HR_obs_12h         = slide_int(HR,         ~sum(!is.na(.x)), .before = 11, .complete = FALSE),
-      Temp_obs_12h       = slide_int(Temp,       ~sum(!is.na(.x)), .before = 11, .complete = FALSE),
-      FiO2_obs_12h         = slide_int(FiO2,        ~sum(!is.na(.x)), .before = 11,  .complete = FALSE),
-      Lactate_obs_12h         = slide_int(Lactate,        ~sum(!is.na(.x)), .before = 11,  .complete = FALSE),
+      FiO2_obs_6h     = slide_int(FiO2,    ~sum(!is.na(.x)), .before = 5,  .complete = FALSE),
+      Lactate_obs_6h  = slide_int(Lactate, ~sum(!is.na(.x)), .before = 5,  .complete = FALSE),
       
-      total_obs_6h       = HR_obs_6h + Temp_obs_6h + Resp_obs_6h + MAP_obs_6h + FiO2_obs_6h + Lactate_obs_6h + SBP_obs_6h ) %>%
+      Platelets_obs_6h   = slide_int(Platelets,  ~sum(!is.na(.x)), .before = 5,  .complete = FALSE),
+      Creatinine_obs_6h  = slide_int(Creatinine, ~sum(!is.na(.x)), .before = 5,  .complete = FALSE),
+      
+      HR_obs_12h      = slide_int(HR,      ~sum(!is.na(.x)), .before = 11, .complete = FALSE),
+      Temp_obs_12h    = slide_int(Temp,    ~sum(!is.na(.x)), .before = 11, .complete = FALSE),
+      Resp_obs_12h    = slide_int(Resp,    ~sum(!is.na(.x)), .before = 11, .complete = FALSE),
+      MAP_obs_12h     = slide_int(MAP,     ~sum(!is.na(.x)), .before = 11, .complete = FALSE),
+      SBP_obs_12h     = slide_int(SBP,     ~sum(!is.na(.x)), .before = 11, .complete = FALSE),
+      WBC_obs_12h     = slide_int(WBC,     ~sum(!is.na(.x)), .before = 11, .complete = FALSE),
+      
+      FiO2_obs_12h    = slide_int(FiO2,    ~sum(!is.na(.x)), .before = 11, .complete = FALSE),
+      Lactate_obs_12h = slide_int(Lactate, ~sum(!is.na(.x)), .before = 11, .complete = FALSE),
+      
+      total_obs_6h    = HR_obs_6h + Temp_obs_6h + Resp_obs_6h + MAP_obs_6h +
+        SBP_obs_6h + WBC_obs_6h + FiO2_obs_6h + Lactate_obs_6h +
+        Platelets_obs_6h + Creatinine_obs_6h
+    ) %>%
     ungroup()
 }
 
-
-#------------------------------------------------------------------------
-#defining add rolling features to dataset function -----------------------
 
 add_rolling_features <- function(df) {
   df %>%
     arrange(patient_id, ICULOS) %>%
     group_by(patient_id) %>%
     mutate(
-      HR_roll_mean_6   = slide_dbl(HR,   ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
-      Temp_roll_mean_6 = slide_dbl(Temp, ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
-      Resp_roll_mean_6 = slide_dbl(Resp, ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
-      MAP_roll_mean_6  = slide_dbl(MAP,  ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
-      Lactate_roll_mean_6  = slide_dbl(Lactate,  ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
-      FiO2_roll_mean_6  = slide_dbl(FiO2,  ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
-      Platelets_roll_mean_6  = slide_dbl(Platelets,  ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
-      Creatinine_roll_mean_6  = slide_dbl(Creatinine,  ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+      # --- 6h means ---
+      HR_roll_mean_6          = slide_dbl(HR,         ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+      Temp_roll_mean_6        = slide_dbl(Temp,       ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+      Resp_roll_mean_6        = slide_dbl(Resp,       ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+      MAP_roll_mean_6         = slide_dbl(MAP,        ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+      SBP_roll_mean_6         = slide_dbl(SBP,        ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+      WBC_roll_mean_6         = slide_dbl(WBC,        ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+      FiO2_roll_mean_6        = slide_dbl(FiO2,       ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+      Lactate_roll_mean_6     = slide_dbl(Lactate,    ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+      Platelets_roll_mean_6   = slide_dbl(Platelets,  ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+      Creatinine_roll_mean_6  = slide_dbl(Creatinine, ~mean(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
       
+      # --- 12h means ---
+      HR_roll_mean_12         = slide_dbl(HR,         ~mean(.x, na.rm = TRUE), .before = 11, .complete = FALSE),
+      Temp_roll_mean_12       = slide_dbl(Temp,       ~mean(.x, na.rm = TRUE), .before = 11, .complete = FALSE),
+      Resp_roll_mean_12       = slide_dbl(Resp,       ~mean(.x, na.rm = TRUE), .before = 11, .complete = FALSE),
+      MAP_roll_mean_12        = slide_dbl(MAP,        ~mean(.x, na.rm = TRUE), .before = 11, .complete = FALSE),
+      SBP_roll_mean_12        = slide_dbl(SBP,        ~mean(.x, na.rm = TRUE), .before = 11, .complete = FALSE),
+      WBC_roll_mean_12        = slide_dbl(WBC,        ~mean(.x, na.rm = TRUE), .before = 11, .complete = FALSE),
+      FiO2_roll_mean_12       = slide_dbl(FiO2,       ~mean(.x, na.rm = TRUE), .before = 11, .complete = FALSE),
+      Lactate_roll_mean_12    = slide_dbl(Lactate,    ~mean(.x, na.rm = TRUE), .before = 11, .complete = FALSE),
       
-      HR_roll_mean_12   = slide_dbl(HR,   ~mean(.x, na.rm = TRUE), .before = 11, .complete = FALSE),
-      Temp_roll_mean_12 = slide_dbl(Temp, ~mean(.x, na.rm = TRUE), .before = 11, .complete = FALSE),
-      Resp_roll_mean_12 = slide_dbl(Resp, ~mean(.x, na.rm = TRUE), .before = 11, .complete = FALSE),
-      MAP_roll_mean_12  = slide_dbl(MAP,  ~mean(.x, na.rm = TRUE), .before = 11, .complete = FALSE),
-      Lactate_roll_mean_12  = slide_dbl(Lactate,  ~mean(.x, na.rm = TRUE), .before = 11, .complete = FALSE),
-      FiO2_roll_mean_12  = slide_dbl(FiO2,  ~mean(.x, na.rm = TRUE), .before = 11, .complete = FALSE),
-      
-      HR_roll_sd_6   = slide_dbl(HR,   ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
-      MAP_roll_sd_6  = slide_dbl(MAP,  ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
-      Resp_roll_sd_6 = slide_dbl(Resp, ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
-      Temp_roll_sd_6 = slide_dbl(Temp, ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
-      Lactate_roll_sd_6   = slide_dbl(Lactate,   ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
-      FiO2_roll_sd_6   = slide_dbl(FiO2,   ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
-      Platelets_roll_sd_6  = slide_dbl(Platelets,  ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
-      Creatinine_roll_sd_6  = slide_dbl(Creatinine,  ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE)
-      
+      # --- 6h standard deviations ---
+      HR_roll_sd_6            = slide_dbl(HR,         ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+      Temp_roll_sd_6          = slide_dbl(Temp,       ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+      Resp_roll_sd_6          = slide_dbl(Resp,       ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+      MAP_roll_sd_6           = slide_dbl(MAP,        ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+      SBP_roll_sd_6           = slide_dbl(SBP,        ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+      WBC_roll_sd_6           = slide_dbl(WBC,        ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+      FiO2_roll_sd_6          = slide_dbl(FiO2,       ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+      Lactate_roll_sd_6       = slide_dbl(Lactate,    ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+      Platelets_roll_sd_6     = slide_dbl(Platelets,  ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
+      Creatinine_roll_sd_6    = slide_dbl(Creatinine, ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE)
     ) %>%
     ungroup()
 }
+
 #------------------------------------------------------------------------
 
 #Applying the function to preprocessing of the training and test dataset
@@ -188,19 +206,15 @@ sepsis_results <- test_preprocess_ffill %>%
   bind_cols(class_preds_sepsis, prob_preds_sepsis) %>%
   mutate(SepsisLabel = factor(SepsisLabel, levels = c("1", "0")))
 
-sepsis_results
 #-----------------------------------------------------------
 
 # test_preprocess_ffill <- test_preprocess_ffill %>%
 #  mutate(Sepsis_Preds = prob_preds_sepsis$.pred_1*100)
 
-
 #Evalutation --------------------------------------------------
 # library(DescTools)
 # BrierScore(sepsis_results$SepsisLabel == "1", sepsis_results$.pred_1)
 
-prediction_eval <- metric_set(roc_auc, brier_class)
-
-prediction_eval(sepsis_results, truth = SepsisLabel, .pred_1, event_level = "first")
+metric_set(roc_auc, brier_class)(sepsis_results, truth = SepsisLabel, .pred_1, event_level = "first")
 #-----------------------------------------------------------
 
