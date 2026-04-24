@@ -143,27 +143,15 @@ test_preprocess_ffill <- test %>%
 sepsis_recipe_xgb <- recipe(SepsisLabel ~ ., data = train_preprocess_ffill) %>%
   step_rm(patient_id) %>%
   step_dummy(Gender) %>%
-  #step_impute_mean(all_numeric_predictors()) %>%
+  step_impute_mean(all_numeric_predictors()) %>%
   step_mutate(SIRS_score = (HR > 90) + (Temp > 38 | Temp < 36) + (Resp > 20) + (WBC > 12 | WBC < 4)) %>%
   step_corr(threshold = 0.8)
 
 #Model - Hyperparameters, mode and Engine---------------------------------
-
 xgb_sepsis_model <- boost_tree(
-  trees          = 500,
-  tree_depth     = 6,
-  learn_rate     = 0.05,
-  min_n          = 5,
-  sample_size    = 0.8,
-  mtry           = 0.8,
-  stop_iter      = 20
+  trees = 100
 ) %>%
-  set_engine(
-    "xgboost",
-    counts           = FALSE,
-    eval_metric      = "auc",
-    validation       = 0.1
-  ) %>%
+  set_engine("xgboost", eval_metric = "auc") %>%
   set_mode("classification")
 
 #---- using Workflow to prep bake and add the model-----------------------------------
@@ -173,6 +161,7 @@ xgb_wf <- workflow() %>%
   add_model(xgb_sepsis_model)
 
 # Fitting model -------------------------------------------
+set.seed(123)
 
 xgb_final_fit <- xgb_wf %>%
   fit(data = train_preprocess_ffill)
@@ -180,7 +169,6 @@ xgb_final_fit <- xgb_wf %>%
 #-----------------------------------------------------------
 #preparing preditions --------------------------------------------------------
 
-class_preds <- predict(xgb_final_fit, new_data = test_preprocess_ffill, type = "class")
 prob_preds  <- predict(xgb_final_fit, new_data = test_preprocess_ffill, type = "prob")
 
 #-----------------------------------------------------------
@@ -188,10 +176,11 @@ prob_preds  <- predict(xgb_final_fit, new_data = test_preprocess_ffill, type = "
 
 sepsis_results <- test_preprocess_ffill %>%
   select(SepsisLabel) %>%
-  bind_cols(class_preds, prob_preds) %>%
+  bind_cols(prob_preds) %>%
   mutate(SepsisLabel = factor(SepsisLabel, levels = c("1", "0")))
 
 #-----------------------------------------------------------
 #Evalutation --------------------------------------------------
 
 metric_set(roc_auc, brier_class)(sepsis_results, truth = SepsisLabel, .pred_1, event_level = "first")
+

@@ -132,7 +132,7 @@ test_preprocess_ffill <- test %>%
 sepsis_recipe_xgb <- recipe(SepsisLabel ~ ., data = train_preprocess_ffill) %>%
   step_rm(patient_id) %>%
   step_dummy(Gender) %>%
-  #step_impute_mean(all_numeric_predictors()) %>%
+  step_impute_mean(all_numeric_predictors()) %>%
   step_mutate(SIRS_score = (HR > 90) + (Temp > 38 | Temp < 36) + (Resp > 20) + (WBC > 12 | WBC < 4)) %>%
   step_corr(threshold = 0.8)
 
@@ -141,23 +141,16 @@ xgb_tune_model <- boost_tree(
   trees       = 500,
   tree_depth  = tune(),
   learn_rate  = tune(),
-  min_n       = tune(),
-  sample_size = 0.8,
-  mtry        = 0.8,
   stop_iter   = 20
 ) %>%
   set_engine("xgboost", counts = FALSE, eval_metric = "auc", validation = 0.1) %>%
   set_mode("classification")
 
-# Setting up a tuning grid  -----------------------------------------------------
-set.seed(123)
 xgb_grid <- grid_latin_hypercube(
   tree_depth(range = c(3, 9)),
-  learn_rate(range = c(0.01, 0.2), trans = NULL),
-  min_n(range = c(1, 10)),
+  learn_rate(range = c(-2, -0.5), trans = log10_trans()),
   size = 20
 )
-
 # ----- setting up Workflow  -----------------------------------------------------
 xgb_tune_wf <- workflow() %>%
   add_recipe(sepsis_recipe_xgb) %>%
@@ -201,3 +194,12 @@ sepsis_results <- test_preprocess_ffill %>%
 
 #results -----------------------------------------------------
 metric_set(roc_auc, brier_class)(sepsis_results, truth = SepsisLabel, .pred_1, event_level = "first")
+
+
+
+#Claude suggestion for showing results across folds
+collect_metrics(xgb_tune_results, summarize = FALSE) %>%
+  inner_join(best_params, by = c("tree_depth", "learn_rate")) %>%
+  select(Fold = id, Metric = .metric, Estimate = .estimate) %>%
+  pivot_wider(names_from = Metric, values_from = Estimate) %>%
+  rename(AUC = roc_auc, Brier = brier_class)
