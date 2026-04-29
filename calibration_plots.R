@@ -2,6 +2,7 @@ library(tidyverse)
 library(tidymodels)
 library(xgboost)
 library(slider)
+library(probably)
 
 #exclusion of variables --------------------------------------------------------
 
@@ -258,8 +259,20 @@ cal_plot_windowed(sepsis_results_log_reg, truth = SepsisLabel, .pred_1,
 #---------------------------------------------------------------------------------------
 # -------------------SIRS model + cal plot  --------------------------------------------
 #---------------------------------------------------------------------------------------
+train_preprocess_ffill_SIRS <- train %>%
+  select(-any_of(excluded_variables)) %>%
+  ffill_dataset() %>% 
+  mutate(SepsisLabel = factor(SepsisLabel, levels = c("1", "0")),
+         Gender = as.factor(Gender)) 
 
-SIRS_recipe <- recipe(SepsisLabel ~ HR + Temp + Resp + WBC, data = train_preprocess_ffill) %>%            #selecting the 4 variables used in the SIRS model
+test_preprocess_ffill_SIRS <- test %>%
+  select(-any_of(excluded_variables)) %>%
+  ffill_dataset() %>% 
+  mutate(SepsisLabel = factor(SepsisLabel, levels = c("1", "0")),
+         Gender = as.factor(Gender))
+
+
+SIRS_recipe <- recipe(SepsisLabel ~ HR + Temp + Resp + WBC, data = train_preprocess_ffill_SIRS) %>%            #selecting the 4 variables used in the SIRS model
   step_impute_mean(all_numeric_predictors()) %>%                                                          #uses the mean from training dataset to fill the rest of NA
   step_mutate(SIRS_score = (HR > 90) + (Temp > 38 | Temp < 36) + (Resp > 20) + (WBC > 12 | WBC < 4)) %>%  #creates new column with sirs scores based on the true arguments
   step_select(SepsisLabel, SIRS_score)                                                                    #selects SepsisLabel and SIRS_score as variables
@@ -274,13 +287,13 @@ logistic_sirs_model <- logistic_reg() %>%
 #Prep and baking of data into Training and Test dataset ----
 
 Sirs_benchmark_prep <- SIRS_recipe %>%
-  prep(training = train_preprocess_ffill)
+  prep(training = train_preprocess_ffill_SIRS)
 
 Sirs_benchmark_training_prep <- Sirs_benchmark_prep %>%
   bake(new_data = NULL)
 
 Sirs_benchmark_test_prep <- Sirs_benchmark_prep %>%
-  bake(new_data = test_preprocess_ffill)
+  bake(new_data = test_preprocess_ffill_SIRS)
 #-----------------------------------------------------------
 
 # Fitting model -------------------------------------------
@@ -295,7 +308,7 @@ prob_preds_sirs <- predict(Logistic_sirs_fit, new_data = Sirs_benchmark_test_pre
 #-----------------------------------------------------------
 
 #Results of the model --------------------------------------
-sirs_results <- test_preprocess_ffill %>%
+sirs_results <- test_preprocess_ffill_SIRS %>%
   select(SepsisLabel) %>%
   bind_cols(Class_preds_sirs, prob_preds_sirs)
 #-----------------------------------------------------------
