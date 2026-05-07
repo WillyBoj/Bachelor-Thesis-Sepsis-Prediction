@@ -1,21 +1,19 @@
-# ============================================================
 # COMBINED MODEL COMPARISON
 # Models: M1 (SIRS Benchmark) | M6 (Best Logistic Regression) | XGBoost
-# Outputs: Calibration plots (windowed) + Decision Curve Analysis
-# ============================================================
-
+# Outputs: Calibration plots (windowed) + Decision Curve Analysis + Feature Importance plot for XGBoost
 library(tidyverse)
 library(tidymodels)
 library(slider)
 library(probably)
 library(patchwork)
-library(dcurves)    # install.packages("dcurves") if not already installed
+library(dcurves)   
+library(shapviz)
+library(kernelshap)
+library(dplyr)
+library(ggplot2)
 
 
-# ============================================================
 # SHARED VARIABLE LISTS
-# ============================================================
-
 excluded_variables <- c(
   "DBP", "TroponinI", "EtCO2", "PaCO2", "SaO2", "BaseExcess",
   "HCO3", "Hct", "AST", "Alkalinephos", "Bilirubin_direct",
@@ -25,10 +23,7 @@ excluded_variables <- c(
 sirs_variables <- c("patient_id", "HR", "Temp", "Resp", "WBC", "SepsisLabel", "ICULOS")
 
 
-# ============================================================
 # HELPER FUNCTIONS
-# ============================================================
-
 ffill_dataset <- function(df) {
   df %>%
     arrange(patient_id, ICULOS) %>%
@@ -118,10 +113,7 @@ add_rolling_features <- function(df) {
 }
 
 
-# ============================================================
 # DATA PREPROCESSING
-# ============================================================
-
 # --- M1: SIRS benchmark (4 SIRS variables only) ---
 train_m1 <- train %>%
   select(any_of(sirs_variables)) %>%
@@ -153,10 +145,7 @@ test_full <- test %>%
          Gender      = as.factor(Gender))
 
 
-# ============================================================
 # RECIPES
-# ============================================================
-
 # M1: SIRS benchmark — logistic regression on SIRS_score only
 recipe_m1 <- recipe(SepsisLabel ~ HR + Temp + Resp + WBC, data = train_m1) %>%
   step_impute_mean(all_numeric_predictors()) %>%
@@ -174,10 +163,7 @@ recipe_full <- recipe(SepsisLabel ~ ., data = train_full) %>%
   step_corr(threshold = 0.8)
 
 
-# ============================================================
 # MODEL ENGINES
-# ============================================================
-
 logistic_engine <- logistic_reg() %>%
   set_engine("glm") %>%
   set_mode("classification")
@@ -192,10 +178,7 @@ xgb_engine <- boost_tree(
   set_mode("classification")
 
 
-# ============================================================
 # FIT MODELS & EXTRACT PREDICTIONS
-# ============================================================
-
 # --- M1: SIRS benchmark ---
 message("[1/6] Prepping M1 recipe...")
 prep_m1         <- recipe_m1 %>% prep(training = train_m1)
@@ -233,9 +216,7 @@ pred_xgb <- predict(fit_xgb, new_data = test_full_baked, type = "prob")$.pred_1
 message("[6/6] All models fitted. Building plots...")
 
 
-# ============================================================
 # SHARED GROUND TRUTH
-# ============================================================
 # All models are evaluated on the same test observations;
 # SepsisLabel is consistent across test_m1 and test_full.
 
@@ -247,10 +228,7 @@ truth_factor <- factor(as.numeric(as.character(test_m1$SepsisLabel)),
 truth_num <- as.numeric(as.character(test_m1$SepsisLabel))
 
 
-# ============================================================
 # CALIBRATION PLOTS (windowed)
-# ============================================================
-
 make_cal_df <- function(pred_probs, truth) {
   tibble(.pred_1 = pred_probs, SepsisLabel = truth)
 }
@@ -283,10 +261,7 @@ p_cal_xgb <- plot_cal_windowed(make_cal_df(pred_xgb, truth_factor), "XGBoost")
   )
 
 
-# ============================================================
 # DECISION CURVE ANALYSIS
-# ============================================================
-
 dca_df <- tibble(
   SepsisLabel    = truth_num,
   SIRS_Benchmark = pred_m1,
@@ -297,74 +272,69 @@ dca_df <- tibble(
 dca_result <- dca(
   SepsisLabel ~ SIRS_Benchmark + Best_LogReg + XGBoost,
   data       = dca_df,
-  thresholds = seq(0, 0.60, by = 0.005)
+  thresholds = seq(0, 0.40, by = 0.005)
 )
 
 plot(dca_result, smooth = TRUE) +
   labs(
     title = "Decision Curve Analysis – Three-Model Comparison",
     x     = "Threshold Probability",
-    y     = "Net Benefit"
+    y     = "Net Benefit (per 100 patients)"
+  ) +
+  scale_x_continuous(
+    breaks = seq(0, 0.40, by = 0.05),
+    limits = c(0, 0.40),
+    labels = scales::percent_format(accuracy = 1)
+  ) +
+  scale_y_continuous(
+    labels = function(x) x * 100
   ) +
   theme_bw() +
   theme(
     plot.title   = element_text(face = "bold", size = 13),
-    legend.title = element_blank()
   )
 
-# ============================================================
-# SHAP FEATURE IMPORTANCE  (shapviz + kernelshap)
-# install.packages(c("shapviz", "kernelshap"))  if needed
-# ============================================================
-library(shapviz)
-library(kernelshap)
+#### feature importance ####
+xgb_core <- extract_fit_engine(fit_xgb)
 
-# Shared predict function for parsnip GLM fits (returns numeric prob vector)
-pred_fn_glm <- function(object, newdata) {
-  predict(object, new_data = newdata, type = "prob")$.pred_1
-}
+# Subsample to keep beeswarm readable and rendering fast
+set.seed(42)
+X_xgb <- test_full_baked %>%
+  select(-SepsisLabel) %>%
+  slice_sample(n = 16000) %>%
+  as.matrix()
 
-# ── XGBoost: native tree SHAP (fast, exact, no sampling needed) ──────────
+shap_xgb <- shapviz(xgb_core, X_pred = X_xgb)
 
-xgb_core  <- extract_fit_engine(fit_xgb)
-X_xgb     <- test_full_baked %>% select(-SepsisLabel) %>% as.matrix()
-shap_xgb  <- shapviz(xgb_core, X_pred = X_xgb)
+# Mirror, so positive = higher sepsis risk
+shap_xgb$S <- -shap_xgb$S
 
-p_imp_xgb <- sv_importance(shap_xgb, show_numbers = TRUE) +
+feature_names <- c(
+  "ICULOS"            = "ICU Length of Stay",
+  "FiO2_obs_6h"       = "FiO2 Observations (6h)",
+  "HospAdmTime"       = "Hospital Admission Time",
+  "Temp"              = "Temperature",
+  "Creatinine"        = "Creatinine",
+  "SIRS_score"        = "SIRS Score",
+  "Temp_roll_mean_6"  = "Temperature Rolling Mean (6h)",
+  "BUN"               = "Blood Urea Nitrogen",
+  "Resp_roll_mean_12" = "Respiratory Rate Rolling Mean (12h)",
+  "Lactate_obs_12h"   = "Lactate Observations (12h)",
+  "Lactate_obs_6h"    = "Lactate Observations (6h)",
+  "WBC"               = "White Blood Cell Count",
+  "Temp_obs_6h"       = "Temperature Observations (6h)",
+  "HR"                = "Heart Rate",
+  "HR_roll_mean_12"   = "Heart Rate Rolling Mean (12h)"
+)
+
+safe_names <- feature_names[colnames(shap_xgb$S)]
+safe_names[is.na(safe_names)] <- colnames(shap_xgb$S)[is.na(safe_names)]
+colnames(shap_xgb$S) <- safe_names
+colnames(shap_xgb$X) <- safe_names
+
+p_imp_xgb <- sv_importance(shap_xgb, kind = "beeswarm") +
   ggtitle("XGBoost – SHAP Feature Importance") +
   theme_bw(base_size = 10) +
   theme(plot.title = element_text(face = "bold", size = 10))
 
-# ── M6 logistic: kernelshap (subsample test set to keep runtime manageable) ──
-set.seed(42)
-X_m6_explain <- test_full_baked  %>% select(-SepsisLabel) %>% slice_sample(n = 500)
-X_m6_bg      <- train_full_baked %>% select(-SepsisLabel) %>% slice_sample(n = 100)
-
-ks_m6    <- kernelshap(fit_m6, X = X_m6_explain, bg_X = X_m6_bg, pred_fun = pred_fn_glm)
-shap_m6  <- shapviz(ks_m6)
-
-p_imp_m6 <- sv_importance(shap_m6, show_numbers = TRUE) +
-  ggtitle("M6: Best Logistic Regression – SHAP Feature Importance") +
-  theme_bw(base_size = 10) +
-  theme(plot.title = element_text(face = "bold", size = 10))
-
-# ── M1 SIRS benchmark: kernelshap (single feature – SIRS_score) ──────────
-
-set.seed(42)
-X_m1_explain <- test_m1_baked  %>% select(-SepsisLabel) %>% slice_sample(n = 500)
-X_m1_bg      <- train_m1_baked %>% select(-SepsisLabel) %>% slice_sample(n = 100)
-
-ks_m1    <- kernelshap(fit_m1, X = X_m1_explain, bg_X = X_m1_bg, pred_fun = pred_fn_glm)
-shap_m1  <- shapviz(ks_m1)
-
-p_imp_m1 <- sv_importance(shap_m1, show_numbers = TRUE) +
-  ggtitle("M1: SIRS Benchmark – SHAP Feature Importance") +
-  theme_bw(base_size = 10) +
-  theme(plot.title = element_text(face = "bold", size = 10))
-
-# ── Combined importance plot ──────────────────────────────────────────────
-(p_imp_m1 | p_imp_m6 | p_imp_xgb) +
-  plot_annotation(
-    title = "SHAP Feature Importance – Three-Model Comparison",
-    theme = theme(plot.title = element_text(face = "bold", size = 13))
-  )
+print(p_imp_xgb)
