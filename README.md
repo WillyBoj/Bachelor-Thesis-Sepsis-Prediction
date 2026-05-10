@@ -1,7 +1,7 @@
 Sepsis Risk Prediction - Thesis Analysis Notebook
 ================
 Thesis Project
-2026-05-07
+2026-05-10
 
 - [1. Libraries](#1-libraries)
 - [2. Load Data](#2-load-data)
@@ -12,6 +12,7 @@ Thesis Project
     predictors)](#32-pairwise-correlation-training-numeric-predictors)
   - [3.3 % of patients with at least one
     measurement](#33--of-patients-with-at-least-one-measurement)
+  - [3.4 Density plots](#34-density-plots)
 - [4. Shared Preprocessing Functions (LogReg &
   XGBoost)](#4-shared-preprocessing-functions-logreg--xgboost)
   - [4.1 Apply Preprocessing (Shared Train &
@@ -35,27 +36,29 @@ Thesis Project
 - [10. Decision Curve Analysis (DCA)](#10-decision-curve-analysis-dca)
 - [11. Feature Importance - SHAP
   values](#11-feature-importance---shap-values)
+- [11. Timing of detection ICULOS
+  Bins](#11-timing-of-detection-iculos-bins)
 
 ------------------------------------------------------------------------
 
 > **Research question:** How well does a machine-learning and classical
-> statistical model trained on sepsis-related data predict the risk of
-> sepsis compared to a SIRS-based benchmark, when evaluated in terms of
-> AUC, Brier score, calibration, and decision-curve analysis using the
-> PhysioNet Sepsis Challenge dataset?
+> statistical models trained on sepsis related data, predict the risk of
+> sepsis compared to a SIRS-based benchmark when evaluated in terms of
+> prediction accuracy, timing of detection, false alarm rates, and
+> clinical application using the PhysioNet Sepsis Challenge dataset?
 
 ------------------------------------------------------------------------
 
 # 1. Libraries
 
-> - `tidyverse` / `tidymodels` — data wrangling and modelling framework
-> - `slider` — rolling window calculations for feature engineering
-> - `ggcorrplot` — correlation heatmap
-> - `riskRegression` — model comparison with confidence intervals and
+> - `tidyverse` / `tidymodels` - data wrangling and modelling framework
+> - `slider` - rolling window calculations for feature engineering
+> - `ggcorrplot` - correlation heatmap
+> - `riskRegression` - model comparison with confidence intervals and
 >   contrasts
-> - `probably` — calibration plots
-> - `dcurves` — decision curve analysis
-> - `shapviz` — SHAP feature importance for XGBoost
+> - `probably` - calibration plots
+> - `dcurves` - decision curve analysis
+> - `shapviz` - SHAP feature importance for XGBoost
 
 ``` r
 library(tidyverse)
@@ -116,6 +119,18 @@ library(probably)
 ``` r
 library(dcurves)   
 library(shapviz)
+library(pROC)
+```
+
+    ## Type 'citation("pROC")' for a citation.
+    ## 
+    ## Attaching package: 'pROC'
+    ## 
+    ## The following objects are masked from 'package:stats':
+    ## 
+    ##     cov, smooth, var
+
+``` r
 library(ggplot2)
 
 tidymodels_prefer()
@@ -125,8 +140,8 @@ tidymodels_prefer()
 
 # 2. Load Data
 
-> - `sepsis_data` — full dataset, used only for EDA in Section 3
-> - `train` / `test` — Sets used for all modelling, after split
+> - `sepsis_data` - full dataset, used only for EDA in Section 3
+> - `train` / `test` - Sets used for all modelling, after split
 
 ``` r
 sepsis_data <- read_csv("/home/william/Documents/R-markdown files/sepsis_data.csv")
@@ -267,18 +282,145 @@ patient_coverage(sepsis_data, id_col = "patient_id")
     ## # ℹ 32 more rows
     ## # ℹ abbreviated name: ¹​pct_patients_with_any_value
 
+## 3.4 Density plots
+
+``` r
+library(tidyverse)
+
+# ── 1. Variable order and labels ─────────────────────────────────────────────
+plot_vars <- c(
+  "HR", "MAP", "SBP", "O2Sat",
+  "Resp", "FiO2", "BUN", "Creatinine",
+  "Magnesium", "Calcium", "Chloride", "Phosphate",
+  "Potassium", "Lactate", "pH", "Hgb",
+  "WBC", "Platelets", "Glucose", "Temp",
+  "Age", "Gender", "HospAdmTime", "ICULOS"
+)
+
+var_labels <- c(
+  HR          = "Heart Rate (bpm)",
+  MAP         = "Mean Arterial Pressure (mmHg)",
+  SBP         = "Systolic BP (mmHg)",
+  O2Sat       = "Oxygen Saturation (%)",
+  Resp        = "Respiration Rate (breaths/min)",
+  FiO2        = "Fraction of Inspired O2 (%)",
+  BUN         = "Blood Urea Nitrogen (mg/dL)",
+  Creatinine  = "Creatinine (mg/dL)",
+  Magnesium   = "Magnesium (mmol/dL)",
+  Calcium     = "Calcium (mg/dL)",
+  Chloride    = "Chloride (mmol/L)",
+  Phosphate   = "Phosphate (mg/dL)",
+  Potassium   = "Potassium (mmol/L)",
+  Lactate     = "Lactic Acid (mg/dL)",
+  pH          = "pH",
+  Hgb         = "Hemoglobin (g/dL)",
+  WBC         = "Leukocyte Count (count/L)",
+  Platelets   = "Platelet Count (count/mL)",
+  Glucose     = "Serum Glucose (mg/dL)",
+  Temp        = "Temperature (°C)",
+  Age         = "Age (years)",
+  Gender      = "Gender (0=F, 1=M)",
+  HospAdmTime = "Hospital to ICU Time (hours)",
+  ICULOS      = "ICU Length of Stay (hours)"
+)
+
+# ── 2. X-axis limits ──────────────────────────────────────────────────────────
+xlims <- tibble::tribble(
+  ~variable,    ~xmin,  ~xmax,
+  "HR",          0,      200,
+  "MAP",         0,      150,
+  "SBP",         50,     250,
+  "O2Sat",       80,     100,
+  "Resp",        0,      50,
+  "FiO2",        0,      1,
+  "BUN",         0,      100,
+  "Creatinine",  0,      10,
+  "Magnesium",   0,      5,
+  "Calcium",     5,      15,
+  "Chloride",    80,     130,
+  "Phosphate",   0,      10,
+  "Potassium",   2,      8,
+  "Lactate",     0,      10,
+  "pH",          6.75,   7.75,
+  "Hgb",         0,      20,
+  "WBC",         0,      40,
+  "Platelets",   0,      600,
+  "Glucose",     0,      400,
+  "Temp",        32.5,   42.5,
+  "Age",         0,      100,
+  "Gender",     -0.5,    1.5,
+  "HospAdmTime",-100,    50,
+  "ICULOS",      0,      150
+)
+
+# ── 3. Pivot to long and clip values to x limits ──────────────────────────────
+sepsis_long <- sepsis_data %>%
+  select(all_of(c(plot_vars, "SepsisLabel"))) %>%
+  pivot_longer(
+    cols      = all_of(plot_vars),
+    names_to  = "variable",
+    values_to = "value"
+  ) %>%
+  left_join(xlims, by = "variable") %>%
+  filter(value >= xmin, value <= xmax) %>%   # <-- clips instead of scale tricks
+  select(-xmin, -xmax) %>%
+  mutate(variable = factor(variable, levels = plot_vars))
+
+# ── 4. Plot ───────────────────────────────────────────────────────────────────
+sepsis_long %>%
+  ggplot(aes(
+    x      = value,
+    colour = factor(SepsisLabel),
+    fill   = factor(SepsisLabel)
+  )) +
+  geom_density(alpha = 0.4) +
+  facet_wrap(
+    ~ variable,
+    ncol     = 4,
+    scales   = "free",
+    labeller = as_labeller(var_labels)
+  ) +
+  scale_colour_manual(
+    values = c("0" = "#F8766D", "1" = "#00BFC4"),
+    labels = c("Not sepsis", "Sepsis")
+  ) +
+  scale_fill_manual(
+    values = c("0" = "#F8766D", "1" = "#00BFC4"),
+    labels = c("Not sepsis", "Sepsis")
+  ) +
+  labs(
+    title  = "Density distributions per variable stratified by Sepsis status",
+    x      = NULL,
+    y      = "Density",
+    colour = "Sepsis status",
+    fill   = "Sepsis status"
+  ) +
+  theme_light() +
+  theme(
+    legend.position  = "bottom",
+    legend.title     = element_text(face = "bold"),
+    strip.text       = element_text(size = 8, colour = "black"),
+    strip.background = element_rect(fill = "grey92", colour = NA),
+    axis.text        = element_text(size = 6),
+    panel.grid.minor = element_blank(),
+    plot.title       = element_text(size=11, face="bold", hjust=0.5)
+  )
+```
+
+![](Bachelor_thesis_R_Code_Notebook_files/figure-gfm/Density-plot-1.png)<!-- -->
+
 ------------------------------------------------------------------------
 
 # 4. Shared Preprocessing Functions (LogReg & XGBoost)
 
-> - Excluded variables — sparse or clinically redundant features removed
-> - Missingness indicators — binary flags capturing which values were
+> - Excluded variables - sparse or clinically redundant features removed
+> - Missingness indicators - binary indicators showing which values were
 >   missing before imputation
-> - Rolling observation counts — measurement availability over 6h and
+> - Rolling observation counts - measurement availability over 6h and
 >   12h windows
-> - Forward-fill — carries last known value forward within each
+> - Forward-fill - carries last known value forward within each
 >   patient’s time series
-> - Rolling means and SDs — captures short-term physiological trends
+> - Rolling means and SDs - captures short-term physiological trends
 >   over 6h and 12h
 
 ``` r
@@ -520,11 +662,10 @@ sirs_metrics
 
 # 6. Logistic Regression
 
-> - Uses the full shared feature set including rolling features and
->   missingness indicators
-> - SIRS score added as an engineered predictor
+> - Uses the full feature set including rolling features and missingness
+>   indicators
+> - SIRS score added as a predictor
 > - Correlated features removed at 0.8 threshold
-> - Interpretable ML baseline for comparison against XGBoost
 
 ## 6.1 Recipe & Model
 
@@ -663,8 +804,6 @@ log_reg_metrics
 > - Hyperparameters from prior tuning: 500 trees, depth 7, learning rate
 >   0.012, early stopping at 20 rounds
 > - 10% internal validation split used for early stopping
-> - Primary ML model — captures non-linear interactions the logistic
->   regression cannot
 
 ## 7.1 Recipe & Model
 
@@ -766,11 +905,9 @@ xgb_metrics
 
 # 8. Model Comparison Summary
 
-> - Formally compares all three models against the SIRS benchmark
+> - Compares all three models against the SIRS benchmark
 > - AUC and Brier score reported with confidence intervals and pairwise
 >   contrast tests
-> - IPA (Index of Prediction Accuracy) shows relative improvement over
->   the null model
 
 ``` r
 pred_list <- list(
@@ -789,8 +926,7 @@ comparison <- Score(
   data      = score_evaluation,
   metrics   = c("auc", "brier"),
   contrasts = TRUE,
-  plots     = "calibration",
-  summary   = "ipa"
+  plots     = "calibration"
 )
 
 summary(comparison)
@@ -798,12 +934,12 @@ summary(comparison)
 
     ## $score
     ## Key: <Model>
-    ##                     Model          AUC (%)     Brier (%)       IPA (%)
-    ##                    <fctr>           <char>        <char>        <char>
-    ## 1:             Null model             <NA> 1.8 [1.7;1.8] 0.0 [0.0;0.0]
-    ## 2:    #1 Benchmark (SIRS) 64.3 [63.6;65.0] 1.8 [1.7;1.8] 0.7 [0.7;0.8]
-    ## 3: #6 Logistic Regression 78.2 [77.6;78.8] 1.8 [1.7;1.8] 1.6 [1.1;2.0]
-    ## 4:    #10 XGBoost (tuned) 83.7 [83.2;84.2] 1.7 [1.7;1.7] 5.3 [4.8;5.8]
+    ##                     Model          AUC (%)     Brier (%)
+    ##                    <fctr>           <char>        <char>
+    ## 1:             Null model             <NA> 1.8 [1.7;1.8]
+    ## 2:    #1 Benchmark (SIRS) 64.3 [63.6;65.0] 1.8 [1.7;1.8]
+    ## 3: #6 Logistic Regression 78.2 [77.6;78.8] 1.8 [1.7;1.8]
+    ## 4:    #10 XGBoost (tuned) 83.7 [83.2;84.2] 1.7 [1.7;1.7]
     ## 
     ## $contrasts
     ##                     Model              Reference    delta AUC (%) p-value
@@ -864,27 +1000,6 @@ cat("\n=== Brier contrasts (vs #1 Benchmark) ===\n"); print(comparison$Brier$con
     ## 4: -0.0002224145 -7.387225e-05 9.252493e-05
     ## 5: -0.0009066625 -7.246553e-04 4.407386e-69
     ## 6: -0.0007438050 -5.912260e-04 6.369318e-66
-
-``` r
-cat("\n=== Brier + IPA ===\n"); print(comparison$Brier$score)
-```
-
-    ## 
-    ## === Brier + IPA ===
-
-    ## Key: <model>
-    ##                     model         IPA      Brier           se      lower
-    ##                    <fctr>       <num>      <num>        <num>      <num>
-    ## 1:             Null model 0.000000000 0.01793632 0.0002318677 0.01748187
-    ## 2:    #1 Benchmark (SIRS) 0.007327234 0.01780490 0.0002292804 0.01735552
-    ## 3: #6 Logistic Regression 0.015586640 0.01765675 0.0002202940 0.01722499
-    ## 4:    #10 XGBoost (tuned) 0.052802493 0.01698924 0.0002110902 0.01657551
-    ##         upper
-    ##         <num>
-    ## 1: 0.01839077
-    ## 2: 0.01825428
-    ## 3: 0.01808852
-    ## 4: 0.01740297
 
 ------------------------------------------------------------------------
 
@@ -959,11 +1074,9 @@ dca(SepsisLabel ~ SIRS_Benchmark + Best_LogReg + XGBoost, data = dca_df, thresho
 
 # 11. Feature Importance - SHAP values
 
-> - SHAP values decompose each prediction into individual feature
->   contributions
-> - 16,000 test observations sampled for computational efficiency
-> - Beeswarm plot shows both magnitude and direction of each feature’s
->   effect
+> - SHAP values
+> - 16,000 test observations sampled
+> - Beeswarm plot
 
 ``` r
 set.seed(42)
@@ -994,3 +1107,71 @@ sv_importance(shap_xgb, kind = "beeswarm") + ggtitle("XGBoost – SHAP Feature I
 ```
 
 ![](Bachelor_thesis_R_Code_Notebook_files/figure-gfm/SHAP%20values-1.png)<!-- -->
+
+------------------------------------------------------------------------
+
+# 11. Timing of detection ICULOS Bins
+
+``` r
+#CLAUDE
+
+xgb_preds      <- as.numeric(prob_preds_xgb$.pred_1)
+logistic_preds <- as.numeric(prob_preds_sepsis$.pred_1)
+sirs_preds     <- as.numeric(prob_preds_sirs$.pred_1)
+
+# Build test_df with bins and predictions
+test_df <- test %>%
+  mutate(
+    iculos_bin        = cut(ICULOS, breaks = c(0, 6, 24, 72, Inf),
+                            labels = c("1-6h", "7-24h", "25-72h", ">72h"), right = TRUE),
+    prob_preds_xgb    = xgb_preds,
+    prob_preds_sepsis = logistic_preds,
+    prob_preds_sirs   = sirs_preds
+  )
+
+# Compute AUC per bin
+auc_by_bin <- test_df %>%
+  group_by(iculos_bin) %>%
+  summarise(
+    XGBoost    = as.numeric(auc(roc(SepsisLabel, prob_preds_xgb,    quiet = TRUE))),
+    Logistic   = as.numeric(auc(roc(SepsisLabel, prob_preds_sepsis, quiet = TRUE))),
+    SIRS       = as.numeric(auc(roc(SepsisLabel, prob_preds_sirs,   quiet = TRUE))),
+    n_positive = sum(SepsisLabel == 1),
+    n_obs      = n()
+  )
+
+print(auc_by_bin)
+```
+
+    ## # A tibble: 4 × 6
+    ##   iculos_bin XGBoost Logistic  SIRS n_positive  n_obs
+    ##   <fct>        <dbl>    <dbl> <dbl>      <int>  <int>
+    ## 1 1-6h         0.758    0.679 0.596        673  44713
+    ## 2 7-24h        0.817    0.755 0.644       1791 133627
+    ## 3 25-72h       0.836    0.776 0.651       1855 118707
+    ## 4 >72h         0.672    0.609 0.592       1339  12639
+
+``` r
+# Pivot long for plotting
+auc_long <- auc_by_bin %>%
+  pivot_longer(
+    cols      = c(XGBoost, Logistic, SIRS),
+    names_to  = "model",
+    values_to = "AUC"
+  )
+
+# Plot
+ggplot(auc_long, aes(x = iculos_bin, y = AUC, colour = model, group = model)) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 2.5) +
+  scale_y_continuous(limits = c(0.5, 1), breaks = seq(0.5, 1, 0.05)) +
+  labs(
+    title  = "AUC by ICULOS Bin",
+    x      = "ICULOS Bin",
+    y      = "AUC",
+    colour = "Model"
+  ) +
+  theme_bw()
+```
+
+![](Bachelor_thesis_R_Code_Notebook_files/figure-gfm/ICULOS%20Bins-1.png)<!-- -->
