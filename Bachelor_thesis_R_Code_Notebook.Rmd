@@ -31,8 +31,7 @@ knitr::opts_chunk$set(
 
 ------------------------------------------------------------------------
 
-> **Research question:** How well does a machine-learning and classical statistical models
-> trained on sepsis related data, predict the risk of sepsis compared to a SIRS-based benchmark when evaluated in terms of prediction accuracy, timing of detection, false alarm rates, and clinical application using the PhysioNet Sepsis Challenge dataset?
+> **Research question:** How well does a machine-learning and classical statistical models trained on sepsis related data, predict the risk of sepsis compared to a SIRS-based benchmark when evaluated in terms of prediction accuracy, timing of detection, false alarm rates, and clinical application using the PhysioNet Sepsis Challenge dataset?
 
 ------------------------------------------------------------------------
 
@@ -55,7 +54,6 @@ library(riskRegression)
 library(probably)
 library(dcurves)   
 library(shapviz)
-library(pROC)
 library(ggplot2)
 
 tidymodels_prefer()
@@ -466,13 +464,10 @@ Logistic_sirs_fit
 ```{r sirs-eval, cache=FALSE, dependson="sirs-fit"}
 prob_preds_sirs <- predict(Logistic_sirs_fit, new_data = Sirs_benchmark_test_bake, type = "prob")
 
-sirs_results <- test_sirs %>%
+sirs_results <- Sirs_benchmark_test_bake %>%
   select(SepsisLabel) %>%
   bind_cols(prob_preds_sirs) %>%
   mutate(SepsisLabel = factor(SepsisLabel, levels = c("1", "0")))
-
-test_sirs <- test_sirs %>%
-  mutate(SIRS_Preds = prob_preds_sirs$.pred_1 * 100)
 
 sirs_metrics <- metric_set(roc_auc, brier_class)(
   sirs_results, truth = SepsisLabel, .pred_1, event_level = "first"
@@ -524,7 +519,7 @@ Logistic_sepsis_fit
 ```{r logreg-eval, cache=FALSE}
 prob_preds_sepsis <- predict(Logistic_sepsis_fit, new_data = Sepsis_log_test_bake, type = "prob")
 
-sepsis_log_results <- test_preprocess_ffill %>%
+sepsis_log_results <- Sepsis_log_test_bake %>%
   select(SepsisLabel) %>%
   bind_cols(prob_preds_sepsis) %>%
   mutate(SepsisLabel = factor(SepsisLabel, levels = c("1", "0")))
@@ -569,14 +564,20 @@ xgb_sepsis_model <- boost_tree(
 ## 7.2 Workflow & Fit
 
 ```{r xgb-fit, cache=FALSE}
+# xgb_wf <- workflow() %>%
+#   add_recipe(sepsis_recipe_xgb) %>%
+#   add_model(xgb_sepsis_model)
+
+xgb_prep <- sepsis_recipe_xgb %>% prep(training = train_preprocess_ffill)
+train_baked_xgb  <- xgb_prep %>% bake(new_data = NULL)
+test_baked_xgb   <- xgb_prep %>% bake(new_data = test_preprocess_ffill)
+
 xgb_wf <- workflow() %>%
-  add_recipe(sepsis_recipe_xgb) %>%
+  add_formula(SepsisLabel ~ .) %>%
   add_model(xgb_sepsis_model)
 
 set.seed(123)
-
-xgb_final_fit <- xgb_wf %>%
-  fit(data = train_preprocess_ffill)
+xgb_final_fit <- xgb_wf %>% fit(data = train_baked_xgb)
 
 xgb_final_fit
 ```
@@ -584,9 +585,9 @@ xgb_final_fit
 ## 7.3 Predictions & Evaluation
 
 ```{r xgb-eval, cache=FALSE}
-prob_preds_xgb <- predict(xgb_final_fit, new_data = test_preprocess_ffill, type = "prob")
+prob_preds_xgb <- predict(xgb_final_fit, new_data = test_baked_xgb, type = "prob")
 
-xgb_results <- test_preprocess_ffill %>%
+xgb_results <- test_baked_xgb %>%
   select(SepsisLabel) %>%
   bind_cols(prob_preds_xgb) %>%
   mutate(SepsisLabel = factor(SepsisLabel, levels = c("1", "0")))
@@ -689,32 +690,49 @@ dca(SepsisLabel ~ SIRS_Benchmark + Best_LogReg + XGBoost, data = dca_df, thresho
 > - Beeswarm plot
 
 ```{r SHAP values, cache=FALSE}
+# Bake test data using the recipe from the fitted workflow
+xgb_core <- extract_fit_engine(xgb_final_fit)
 
 set.seed(42)
-xgb_test_baked <- extract_recipe(xgb_final_fit) %>%
-  bake(new_data = test_preprocess_ffill %>% slice_sample(n = 16000)) %>%
+X_xgb <- test_baked_xgb %>%
   select(-SepsisLabel) %>%
+  slice_sample(n = 16000) %>%
   as.matrix()
 
-shap_xgb <- shapviz(extract_fit_engine(xgb_final_fit), X_pred = xgb_test_baked)
+shap_xgb <- shapviz(xgb_core, X_pred = X_xgb)
 shap_xgb$S <- -shap_xgb$S
 
 feature_names <- c(
-  ICULOS = "ICU Length of Stay", FiO2_obs_6h = "FiO2 Observations (6h)",
-  HospAdmTime = "Hospital Admission Time", Temp = "Temperature",
-  Creatinine = "Creatinine", SIRS_score = "SIRS Score",
-  Temp_roll_mean_6 = "Temperature Rolling Mean (6h)", BUN = "Blood Urea Nitrogen",
-  Resp_roll_mean_12 = "Respiratory Rate Rolling Mean (12h)", Lactate_obs_12h = "Lactate Observations (12h)",
-  Lactate_obs_6h = "Lactate Observations (6h)", WBC = "White Blood Cell Count",
-  Temp_obs_6h = "Temperature Observations (6h)", HR = "Heart Rate",
-  HR_roll_mean_12 = "Heart Rate Rolling Mean (12h)"
+  ICULOS              = "ICU Length of Stay",
+  FiO2_obs_6h         = "FiO2 Observations (6h)",
+  HospAdmTime         = "Hospital Admission Time",
+  Temp                = "Temperature",
+  Creatinine          = "Creatinine",
+  SIRS_score          = "SIRS Score",
+  Temp_roll_mean_6    = "Temperature Rolling Mean (6h)",
+  BUN                 = "Blood Urea Nitrogen",
+  Resp_roll_mean_12   = "Respiratory Rate Rolling Mean (12h)",
+  Lactate_obs_12h     = "Lactate Observations (12h)",
+  Lactate_obs_6h      = "Lactate Observations (6h)",
+  WBC                 = "White Blood Cell Count",
+  Temp_obs_6h         = "Temperature Observations (6h)",
+  HR                  = "Heart Rate",
+  HR_roll_mean_12     = "Heart Rate Rolling Mean (12h)",
+  MAP_roll_mean_6     = "Mean Arterial Pressure Mean (6h)"
 )
 
 safe_names <- feature_names[colnames(shap_xgb$S)]
 safe_names[is.na(safe_names)] <- colnames(shap_xgb$S)[is.na(safe_names)]
-colnames(shap_xgb$S) <- colnames(shap_xgb$X) <- safe_names
+colnames(shap_xgb$S) <- safe_names
+colnames(shap_xgb$X) <- safe_names
 
-sv_importance(shap_xgb, kind = "beeswarm") + ggtitle("XGBoost – SHAP Feature Importance")
+sv_importance(shap_xgb, kind = "beeswarm") +
+  ggtitle("XGBoost - SHAP Feature Importance") +
+  theme_bw(base_size = 10) +
+  theme(
+    plot.title = element_text(face = "bold", size = 10),
+    axis.text.y = element_text(face = "bold")
+  )
 ```
 
 ------------------------------------------------------------------------
@@ -723,33 +741,28 @@ sv_importance(shap_xgb, kind = "beeswarm") + ggtitle("XGBoost – SHAP Feature I
 
 ```{r ICULOS Bins, cache=TRUE}
 #CLAUDE
-
-xgb_preds      <- as.numeric(prob_preds_xgb$.pred_1)
-logistic_preds <- as.numeric(prob_preds_sepsis$.pred_1)
-sirs_preds     <- as.numeric(prob_preds_sirs$.pred_1)
-
-# Build test_df with bins and predictions
 test_df <- test %>%
   mutate(
     iculos_bin        = cut(ICULOS, breaks = c(0, 6, 24, 72, Inf),
                             labels = c("1-6h", "7-24h", "25-72h", ">72h"), right = TRUE),
-    prob_preds_xgb    = xgb_preds,
-    prob_preds_sepsis = logistic_preds,
-    prob_preds_sirs   = sirs_preds
+    SepsisLabel       = factor(SepsisLabel, levels = c("1", "0")),
+    prob_preds_xgb    = as.numeric(prob_preds_xgb$.pred_1),
+    prob_preds_sepsis = as.numeric(prob_preds_sepsis$.pred_1),
+    prob_preds_sirs   = as.numeric(prob_preds_sirs$.pred_1)
   )
 
 # Compute AUC per bin
 auc_by_bin <- test_df %>%
   group_by(iculos_bin) %>%
   summarise(
-    XGBoost    = as.numeric(auc(roc(SepsisLabel, prob_preds_xgb,    quiet = TRUE))),
-    Logistic   = as.numeric(auc(roc(SepsisLabel, prob_preds_sepsis, quiet = TRUE))),
-    SIRS       = as.numeric(auc(roc(SepsisLabel, prob_preds_sirs,   quiet = TRUE))),
-    n_positive = sum(SepsisLabel == 1),
+    XGBoost    = roc_auc_vec(SepsisLabel, prob_preds_xgb,    event_level = "first"),
+    Logistic   = roc_auc_vec(SepsisLabel, prob_preds_sepsis, event_level = "first"),
+    SIRS       = roc_auc_vec(SepsisLabel, prob_preds_sirs,   event_level = "first"),
+    n_positive = sum(SepsisLabel == "1"),
     n_obs      = n()
   )
 
-print(auc_by_bin)
+auc_by_bin
 
 # Pivot long for plotting
 auc_long <- auc_by_bin %>%

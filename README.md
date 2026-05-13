@@ -1,7 +1,7 @@
 Sepsis Risk Prediction - Thesis Analysis Notebook
 ================
 Thesis Project
-2026-05-10
+2026-05-13
 
 - [1. Libraries](#1-libraries)
 - [2. Load Data](#2-load-data)
@@ -119,18 +119,6 @@ library(probably)
 ``` r
 library(dcurves)   
 library(shapviz)
-library(pROC)
-```
-
-    ## Type 'citation("pROC")' for a citation.
-    ## 
-    ## Attaching package: 'pROC'
-    ## 
-    ## The following objects are masked from 'package:stats':
-    ## 
-    ##     cov, smooth, var
-
-``` r
 library(ggplot2)
 
 tidymodels_prefer()
@@ -637,13 +625,10 @@ Logistic_sirs_fit
 ``` r
 prob_preds_sirs <- predict(Logistic_sirs_fit, new_data = Sirs_benchmark_test_bake, type = "prob")
 
-sirs_results <- test_sirs %>%
+sirs_results <- Sirs_benchmark_test_bake %>%
   select(SepsisLabel) %>%
   bind_cols(prob_preds_sirs) %>%
   mutate(SepsisLabel = factor(SepsisLabel, levels = c("1", "0")))
-
-test_sirs <- test_sirs %>%
-  mutate(SIRS_Preds = prob_preds_sirs$.pred_1 * 100)
 
 sirs_metrics <- metric_set(roc_auc, brier_class)(
   sirs_results, truth = SepsisLabel, .pred_1, event_level = "first"
@@ -778,7 +763,7 @@ Logistic_sepsis_fit
 ``` r
 prob_preds_sepsis <- predict(Logistic_sepsis_fit, new_data = Sepsis_log_test_bake, type = "prob")
 
-sepsis_log_results <- test_preprocess_ffill %>%
+sepsis_log_results <- Sepsis_log_test_bake %>%
   select(SepsisLabel) %>%
   bind_cols(prob_preds_sepsis) %>%
   mutate(SepsisLabel = factor(SepsisLabel, levels = c("1", "0")))
@@ -830,30 +815,30 @@ xgb_sepsis_model <- boost_tree(
 ## 7.2 Workflow & Fit
 
 ``` r
+# xgb_wf <- workflow() %>%
+#   add_recipe(sepsis_recipe_xgb) %>%
+#   add_model(xgb_sepsis_model)
+
+xgb_prep <- sepsis_recipe_xgb %>% prep(training = train_preprocess_ffill)
+train_baked_xgb  <- xgb_prep %>% bake(new_data = NULL)
+test_baked_xgb   <- xgb_prep %>% bake(new_data = test_preprocess_ffill)
+
 xgb_wf <- workflow() %>%
-  add_recipe(sepsis_recipe_xgb) %>%
+  add_formula(SepsisLabel ~ .) %>%
   add_model(xgb_sepsis_model)
 
 set.seed(123)
-
-xgb_final_fit <- xgb_wf %>%
-  fit(data = train_preprocess_ffill)
+xgb_final_fit <- xgb_wf %>% fit(data = train_baked_xgb)
 
 xgb_final_fit
 ```
 
     ## ══ Workflow [trained] ══════════════════════════════════════════════════════════
-    ## Preprocessor: Recipe
+    ## Preprocessor: Formula
     ## Model: boost_tree()
     ## 
     ## ── Preprocessor ────────────────────────────────────────────────────────────────
-    ## 5 Recipe Steps
-    ## 
-    ## • step_rm()
-    ## • step_dummy()
-    ## • step_impute_mean()
-    ## • step_mutate()
-    ## • step_corr()
+    ## SepsisLabel ~ .
     ## 
     ## ── Model ───────────────────────────────────────────────────────────────────────
     ## ##### xgb.Booster
@@ -872,18 +857,18 @@ xgb_final_fit
     ## evaluation_log:
     ##   iter validation_auc
     ##  <num>          <num>
-    ##      1      0.7950045
-    ##      2      0.8018910
+    ##      1      0.7926706
+    ##      2      0.7949864
     ##    ---            ---
-    ##    499      0.9002103
-    ##    500      0.9002902
+    ##    499      0.9032971
+    ##    500      0.9033624
 
 ## 7.3 Predictions & Evaluation
 
 ``` r
-prob_preds_xgb <- predict(xgb_final_fit, new_data = test_preprocess_ffill, type = "prob")
+prob_preds_xgb <- predict(xgb_final_fit, new_data = test_baked_xgb, type = "prob")
 
-xgb_results <- test_preprocess_ffill %>%
+xgb_results <- test_baked_xgb %>%
   select(SepsisLabel) %>%
   bind_cols(prob_preds_xgb) %>%
   mutate(SepsisLabel = factor(SepsisLabel, levels = c("1", "0")))
@@ -898,7 +883,7 @@ xgb_metrics
     ## # A tibble: 2 × 3
     ##   .metric     .estimator .estimate
     ##   <chr>       <chr>          <dbl>
-    ## 1 roc_auc     binary        0.837 
+    ## 1 roc_auc     binary        0.835 
     ## 2 brier_class binary        0.0170
 
 ------------------------------------------------------------------------
@@ -939,7 +924,7 @@ summary(comparison)
     ## 1:             Null model             <NA> 1.8 [1.7;1.8]
     ## 2:    #1 Benchmark (SIRS) 64.3 [63.6;65.0] 1.8 [1.7;1.8]
     ## 3: #6 Logistic Regression 78.2 [77.6;78.8] 1.8 [1.7;1.8]
-    ## 4:    #10 XGBoost (tuned) 83.7 [83.2;84.2] 1.7 [1.7;1.7]
+    ## 4:    #10 XGBoost (tuned) 83.5 [83.0;84.0] 1.7 [1.7;1.7]
     ## 
     ## $contrasts
     ##                     Model              Reference    delta AUC (%) p-value
@@ -948,8 +933,8 @@ summary(comparison)
     ## 2: #6 Logistic Regression             Null model                         
     ## 3: #6 Logistic Regression    #1 Benchmark (SIRS) 13.9 [13.2;14.6] < 0.001
     ## 4:    #10 XGBoost (tuned)             Null model                         
-    ## 5:    #10 XGBoost (tuned)    #1 Benchmark (SIRS) 19.4 [18.7;20.2] < 0.001
-    ## 6:    #10 XGBoost (tuned) #6 Logistic Regression    5.5 [5.0;6.0] < 0.001
+    ## 5:    #10 XGBoost (tuned)    #1 Benchmark (SIRS) 19.2 [18.5;19.9] < 0.001
+    ## 6:    #10 XGBoost (tuned) #6 Logistic Regression    5.3 [4.8;5.8] < 0.001
     ##     delta Brier (%) p-value
     ##              <char>  <char>
     ## 1: -0.0 [-0.0;-0.0] < 0.001
@@ -969,13 +954,13 @@ cat("\n=== AUC contrasts (vs #1 Benchmark) ===\n");   print(comparison$AUC$contr
     ##                     model              reference  delta.AUC          se
     ##                    <char>                 <char>      <num>       <num>
     ## 1: #6 Logistic Regression    #1 Benchmark (SIRS) 0.13913625 0.003624920
-    ## 2:    #10 XGBoost (tuned)    #1 Benchmark (SIRS) 0.19426682 0.003744849
-    ## 3:    #10 XGBoost (tuned) #6 Logistic Regression 0.05513057 0.002363325
-    ##         lower     upper             p
-    ##         <num>     <num>         <num>
-    ## 1: 0.13203154 0.1462410 2.470328e-322
-    ## 2: 0.18692706 0.2016066  0.000000e+00
-    ## 3: 0.05049854 0.0597626 2.329804e-120
+    ## 2:    #10 XGBoost (tuned)    #1 Benchmark (SIRS) 0.19203146 0.003761451
+    ## 3:    #10 XGBoost (tuned) #6 Logistic Regression 0.05289521 0.002349553
+    ##         lower      upper             p
+    ##         <num>      <num>         <num>
+    ## 1: 0.13203154 0.14624096 2.470328e-322
+    ## 2: 0.18465915 0.19940377  0.000000e+00
+    ## 3: 0.04829017 0.05750025 3.104581e-112
 
 ``` r
 cat("\n=== Brier contrasts (vs #1 Benchmark) ===\n"); print(comparison$Brier$contrasts)
@@ -988,18 +973,18 @@ cat("\n=== Brier contrasts (vs #1 Benchmark) ===\n"); print(comparison$Brier$con
     ##                    <fctr>                 <fctr>         <num>        <num>
     ## 1:    #1 Benchmark (SIRS)             Null model -0.0001314236 7.220196e-06
     ## 2: #6 Logistic Regression             Null model -0.0002795670 4.014077e-05
-    ## 3:    #10 XGBoost (tuned)             Null model -0.0009470825 4.874385e-05
+    ## 3:    #10 XGBoost (tuned)             Null model -0.0009123703 4.813875e-05
     ## 4: #6 Logistic Regression    #1 Benchmark (SIRS) -0.0001481434 3.789413e-05
-    ## 5:    #10 XGBoost (tuned)    #1 Benchmark (SIRS) -0.0008156589 4.643127e-05
-    ## 6:    #10 XGBoost (tuned) #6 Logistic Regression -0.0006675155 3.892394e-05
+    ## 5:    #10 XGBoost (tuned)    #1 Benchmark (SIRS) -0.0007809467 4.581853e-05
+    ## 6:    #10 XGBoost (tuned) #6 Logistic Regression -0.0006328033 3.786735e-05
     ##            lower         upper            p
     ##            <num>         <num>        <num>
     ## 1: -0.0001455749 -1.172723e-04 4.955362e-74
     ## 2: -0.0003582415 -2.008925e-04 3.291893e-12
-    ## 3: -0.0010426187 -8.515463e-04 4.321653e-84
+    ## 3: -0.0010067205 -8.180201e-04 4.176647e-80
     ## 4: -0.0002224145 -7.387225e-05 9.252493e-05
-    ## 5: -0.0009066625 -7.246553e-04 4.407386e-69
-    ## 6: -0.0007438050 -5.912260e-04 6.369318e-66
+    ## 5: -0.0008707494 -6.911440e-04 3.850604e-65
+    ## 6: -0.0007070220 -5.585847e-04 1.088941e-62
 
 ------------------------------------------------------------------------
 
@@ -1079,31 +1064,49 @@ dca(SepsisLabel ~ SIRS_Benchmark + Best_LogReg + XGBoost, data = dca_df, thresho
 > - Beeswarm plot
 
 ``` r
+# Bake test data using the recipe from the fitted workflow
+xgb_core <- extract_fit_engine(xgb_final_fit)
+
 set.seed(42)
-xgb_test_baked <- extract_recipe(xgb_final_fit) %>%
-  bake(new_data = test_preprocess_ffill %>% slice_sample(n = 16000)) %>%
+X_xgb <- test_baked_xgb %>%
   select(-SepsisLabel) %>%
+  slice_sample(n = 16000) %>%
   as.matrix()
 
-shap_xgb <- shapviz(extract_fit_engine(xgb_final_fit), X_pred = xgb_test_baked)
+shap_xgb <- shapviz(xgb_core, X_pred = X_xgb)
 shap_xgb$S <- -shap_xgb$S
 
 feature_names <- c(
-  ICULOS = "ICU Length of Stay", FiO2_obs_6h = "FiO2 Observations (6h)",
-  HospAdmTime = "Hospital Admission Time", Temp = "Temperature",
-  Creatinine = "Creatinine", SIRS_score = "SIRS Score",
-  Temp_roll_mean_6 = "Temperature Rolling Mean (6h)", BUN = "Blood Urea Nitrogen",
-  Resp_roll_mean_12 = "Respiratory Rate Rolling Mean (12h)", Lactate_obs_12h = "Lactate Observations (12h)",
-  Lactate_obs_6h = "Lactate Observations (6h)", WBC = "White Blood Cell Count",
-  Temp_obs_6h = "Temperature Observations (6h)", HR = "Heart Rate",
-  HR_roll_mean_12 = "Heart Rate Rolling Mean (12h)"
+  ICULOS              = "ICU Length of Stay",
+  FiO2_obs_6h         = "FiO2 Observations (6h)",
+  HospAdmTime         = "Hospital Admission Time",
+  Temp                = "Temperature",
+  Creatinine          = "Creatinine",
+  SIRS_score          = "SIRS Score",
+  Temp_roll_mean_6    = "Temperature Rolling Mean (6h)",
+  BUN                 = "Blood Urea Nitrogen",
+  Resp_roll_mean_12   = "Respiratory Rate Rolling Mean (12h)",
+  Lactate_obs_12h     = "Lactate Observations (12h)",
+  Lactate_obs_6h      = "Lactate Observations (6h)",
+  WBC                 = "White Blood Cell Count",
+  Temp_obs_6h         = "Temperature Observations (6h)",
+  HR                  = "Heart Rate",
+  HR_roll_mean_12     = "Heart Rate Rolling Mean (12h)",
+  MAP_roll_mean_6     = "Mean Arterial Pressure Mean (6h)"
 )
 
 safe_names <- feature_names[colnames(shap_xgb$S)]
 safe_names[is.na(safe_names)] <- colnames(shap_xgb$S)[is.na(safe_names)]
-colnames(shap_xgb$S) <- colnames(shap_xgb$X) <- safe_names
+colnames(shap_xgb$S) <- safe_names
+colnames(shap_xgb$X) <- safe_names
 
-sv_importance(shap_xgb, kind = "beeswarm") + ggtitle("XGBoost – SHAP Feature Importance")
+sv_importance(shap_xgb, kind = "beeswarm") +
+  ggtitle("XGBoost - SHAP Feature Importance") +
+  theme_bw(base_size = 10) +
+  theme(
+    plot.title = element_text(face = "bold", size = 10),
+    axis.text.y = element_text(face = "bold")
+  )
 ```
 
 ![](Bachelor_thesis_R_Code_Notebook_files/figure-gfm/SHAP%20values-1.png)<!-- -->
@@ -1114,42 +1117,37 @@ sv_importance(shap_xgb, kind = "beeswarm") + ggtitle("XGBoost – SHAP Feature I
 
 ``` r
 #CLAUDE
-
-xgb_preds      <- as.numeric(prob_preds_xgb$.pred_1)
-logistic_preds <- as.numeric(prob_preds_sepsis$.pred_1)
-sirs_preds     <- as.numeric(prob_preds_sirs$.pred_1)
-
-# Build test_df with bins and predictions
 test_df <- test %>%
   mutate(
     iculos_bin        = cut(ICULOS, breaks = c(0, 6, 24, 72, Inf),
                             labels = c("1-6h", "7-24h", "25-72h", ">72h"), right = TRUE),
-    prob_preds_xgb    = xgb_preds,
-    prob_preds_sepsis = logistic_preds,
-    prob_preds_sirs   = sirs_preds
+    SepsisLabel       = factor(SepsisLabel, levels = c("1", "0")),
+    prob_preds_xgb    = as.numeric(prob_preds_xgb$.pred_1),
+    prob_preds_sepsis = as.numeric(prob_preds_sepsis$.pred_1),
+    prob_preds_sirs   = as.numeric(prob_preds_sirs$.pred_1)
   )
 
 # Compute AUC per bin
 auc_by_bin <- test_df %>%
   group_by(iculos_bin) %>%
   summarise(
-    XGBoost    = as.numeric(auc(roc(SepsisLabel, prob_preds_xgb,    quiet = TRUE))),
-    Logistic   = as.numeric(auc(roc(SepsisLabel, prob_preds_sepsis, quiet = TRUE))),
-    SIRS       = as.numeric(auc(roc(SepsisLabel, prob_preds_sirs,   quiet = TRUE))),
-    n_positive = sum(SepsisLabel == 1),
+    XGBoost    = roc_auc_vec(SepsisLabel, prob_preds_xgb,    event_level = "first"),
+    Logistic   = roc_auc_vec(SepsisLabel, prob_preds_sepsis, event_level = "first"),
+    SIRS       = roc_auc_vec(SepsisLabel, prob_preds_sirs,   event_level = "first"),
+    n_positive = sum(SepsisLabel == "1"),
     n_obs      = n()
   )
 
-print(auc_by_bin)
+auc_by_bin
 ```
 
     ## # A tibble: 4 × 6
     ##   iculos_bin XGBoost Logistic  SIRS n_positive  n_obs
     ##   <fct>        <dbl>    <dbl> <dbl>      <int>  <int>
-    ## 1 1-6h         0.758    0.679 0.596        673  44713
-    ## 2 7-24h        0.817    0.755 0.644       1791 133627
-    ## 3 25-72h       0.836    0.776 0.651       1855 118707
-    ## 4 >72h         0.672    0.609 0.592       1339  12639
+    ## 1 1-6h         0.760    0.679 0.596        673  44713
+    ## 2 7-24h        0.816    0.755 0.644       1791 133627
+    ## 3 25-72h       0.831    0.776 0.651       1855 118707
+    ## 4 >72h         0.669    0.609 0.592       1339  12639
 
 ``` r
 # Pivot long for plotting
