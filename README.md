@@ -1,15 +1,14 @@
 Sepsis Risk Prediction - Thesis Analysis Notebook
 ================
 Thesis Project
-2026-05-13
+2026-05-19
 
 - [1. Libraries](#1-libraries)
 - [2. Load Data](#2-load-data)
 - [3. Exploratory: Correlation &
   Missingness](#3-exploratory-correlation--missingness)
   - [3.1 Missing Data Summary](#31-missing-data-summary)
-  - [3.2 Pairwise Correlation (training numeric
-    predictors)](#32-pairwise-correlation-training-numeric-predictors)
+  - [3.2 Pairwise Correlation](#32-pairwise-correlation)
   - [3.3 % of patients with at least one
     measurement](#33--of-patients-with-at-least-one-measurement)
   - [3.4 Density plots](#34-density-plots)
@@ -51,7 +50,7 @@ Thesis Project
 
 # 1. Libraries
 
-> - `tidyverse` / `tidymodels` - data wrangling and modelling framework
+> - `tidyverse` / `tidymodels` - data preprocessing and modelling
 > - `slider` - rolling window calculations for feature engineering
 > - `ggcorrplot` - correlation heatmap
 > - `riskRegression` - model comparison with confidence intervals and
@@ -61,7 +60,7 @@ Thesis Project
 > - `shapviz` - SHAP feature importance for XGBoost
 
 ``` r
-library(tidyverse)
+library(tidyverse)       
 ```
 
     ## ── Attaching core tidyverse packages ──────────────────────── tidyverse 2.0.0 ──
@@ -76,7 +75,7 @@ library(tidyverse)
     ## ℹ Use the conflicted package (<http://conflicted.r-lib.org/>) to force all conflicts to become errors
 
 ``` r
-library(tidymodels)
+library(tidymodels)      
 ```
 
     ## ── Attaching packages ────────────────────────────────────── tidymodels 1.5.0 ──
@@ -95,9 +94,9 @@ library(tidymodels)
     ## ✖ recipes::step()   masks stats::step()
 
 ``` r
-library(slider)
-library(ggcorrplot)
-library(riskRegression)
+library(slider)          
+library(ggcorrplot)      
+library(riskRegression)  
 ```
 
     ## Registered S3 method overwritten by 'riskRegression':
@@ -106,6 +105,8 @@ library(riskRegression)
     ## riskRegression version 2026.03.11
 
 ``` r
+library(dcurves)         
+library(shapviz)
 library(probably)
 ```
 
@@ -116,71 +117,31 @@ library(probably)
     ## 
     ##     as.factor, as.ordered
 
-``` r
-library(dcurves)   
-library(shapviz)
-library(ggplot2)
-
-tidymodels_prefer()
-```
-
 ------------------------------------------------------------------------
 
 # 2. Load Data
 
-> - `sepsis_data` - full dataset, used only for EDA in Section 3
-> - `train` / `test` - Sets used for all modelling, after split
-
-``` r
-sepsis_data <- read_csv("/home/william/Documents/R-markdown files/sepsis_data.csv")
-```
-
-    ## Rows: 1552210 Columns: 43
-    ## ── Column specification ────────────────────────────────────────────────────────
-    ## Delimiter: ","
-    ## chr  (1): source
-    ## dbl (42): patient_id, HR, O2Sat, Temp, SBP, MAP, DBP, Resp, EtCO2, BaseExces...
-    ## 
-    ## ℹ Use `spec()` to retrieve the full column specification for this data.
-    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
-
-``` r
-train       <- read_csv("/home/william/Documents/R-markdown files/train.csv")
-```
-
-    ## Rows: 1242524 Columns: 42
-    ## ── Column specification ────────────────────────────────────────────────────────
-    ## Delimiter: ","
-    ## dbl (41): patient_id, HR, O2Sat, Temp, SBP, MAP, DBP, Resp, EtCO2, BaseExces...
-    ## lgl  (1): Bilirubin_direct
-    ## 
-    ## ℹ Use `spec()` to retrieve the full column specification for this data.
-    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
-
-``` r
-test        <- read_csv("/home/william/Documents/R-markdown files/test.csv")
-```
-
-    ## Rows: 309686 Columns: 42
-    ## ── Column specification ────────────────────────────────────────────────────────
-    ## Delimiter: ","
-    ## dbl (42): patient_id, HR, O2Sat, Temp, SBP, MAP, DBP, Resp, EtCO2, BaseExces...
-    ## 
-    ## ℹ Use `spec()` to retrieve the full column specification for this data.
-    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+> - `sepsis_data` - full dataset, used only for correlations, data
+>   missingness and density plots in Section 3
+> - `train` / `test` - Sets used for all modelling
 
 ------------------------------------------------------------------------
 
 # 3. Exploratory: Correlation & Missingness
 
 > - Explores the full dataset before any modelling
-> - Informs variable exclusion and preprocessing decisions
+> - Used to decide which variables to include and which to exclude
 
 ## 3.1 Missing Data Summary
 
-> - Percentage of missing values per variable, sorted descending
+> - Percentage of missing row-level-values per variable, sorted
+>   descending
 
 ``` r
+#In the sepsis_data set calculare the missing % for all variables
+#change from wide to long format
+#Sort by descendfing order
+
 missing_summary <- sepsis_data %>%
   summarize(across(everything(), ~ mean(is.na(.x)) * 100)) %>%
   pivot_longer(everything(), names_to = "variable", values_to = "pct_missing") %>%
@@ -204,12 +165,16 @@ missing_summary
     ## 10 EtCO2                   96.3
     ## # ℹ 33 more rows
 
-## 3.2 Pairwise Correlation (training numeric predictors)
+## 3.2 Pairwise Correlation
 
 > - Spearman correlation matrix on all numeric predictors
-> - Variables with \|r\| \> 0.8 are removed downstream by `step_corr`
+> - Variables with \|r\| \> 0.8 will be removed downstream by
+>   `step_corr` as one of our exclusion criteria
 
 ``` r
+#select all numeric variables except sepsislabel
+#calc pairwise correlation with speaman correlation
+
 cor_matrix <- sepsis_data %>%
   select(where(is.numeric), -SepsisLabel) %>%
   cor(use = "pairwise.complete.obs", method = "spearman")
@@ -230,52 +195,43 @@ ggcorrplot(cor_matrix,
 
 ``` r
 #made with ChatGPT
-
+# % of patients with at least one measurement of each variable
 patient_coverage <- function(df, id_col = "patient_id") {
-  stopifnot(id_col %in% names(df))
-df %>%
-  mutate(across(-all_of(id_col), as.character)) %>% 
-  select(all_of(id_col), everything()) %>%
-  pivot_longer(
-    cols = -all_of(id_col),
-    names_to = "variable",
-    values_to = "value"
-  ) %>%
-  group_by(variable) %>%
-  summarise(
-    patients_with_any_value = n_distinct(.data[[id_col]][!is.na(value)]),
-    total_patients = n_distinct(.data[[id_col]]),
-    pct_patients_with_any_value = (patients_with_any_value / total_patients)*100,
-    .groups = "drop"
-  ) %>%
-  arrange(desc(pct_patients_with_any_value), desc(patients_with_any_value))
+  df %>%
+    group_by(.data[[id_col]]) %>%
+    summarise(across(everything(), ~ any(!is.na(.x))), .groups = "drop") %>%
+    summarise(across(-all_of(id_col), ~ mean(.x) * 100)) %>%  
+    pivot_longer(everything(), names_to = "variable", values_to = "pct_coverage") %>%
+    arrange(desc(pct_coverage))
 }
 
 patient_coverage(sepsis_data, id_col = "patient_id")
 ```
 
-    ## # A tibble: 42 × 4
-    ##    variable    patients_with_any_value total_patients pct_patients_with_any_va…¹
-    ##    <chr>                         <int>          <int>                      <dbl>
-    ##  1 Age                           40336          40336                      100  
-    ##  2 Gender                        40336          40336                      100  
-    ##  3 ICULOS                        40336          40336                      100  
-    ##  4 SepsisLabel                   40336          40336                      100  
-    ##  5 source                        40336          40336                      100  
-    ##  6 HospAdmTime                   40335          40336                      100.0
-    ##  7 HR                            40331          40336                      100.0
-    ##  8 O2Sat                         40318          40336                      100.0
-    ##  9 Resp                          40265          40336                       99.8
-    ## 10 MAP                           40232          40336                       99.7
+    ## # A tibble: 42 × 2
+    ##    variable    pct_coverage
+    ##    <chr>              <dbl>
+    ##  1 Age                100  
+    ##  2 Gender             100  
+    ##  3 ICULOS             100  
+    ##  4 SepsisLabel        100  
+    ##  5 source             100  
+    ##  6 HospAdmTime        100.0
+    ##  7 HR                 100.0
+    ##  8 O2Sat              100.0
+    ##  9 Resp                99.8
+    ## 10 MAP                 99.7
     ## # ℹ 32 more rows
-    ## # ℹ abbreviated name: ¹​pct_patients_with_any_value
 
 ## 3.4 Density plots
 
-``` r
-library(tidyverse)
+- Based on our exclusion criteria, we’ve included 24 variables
+- To explore the distribution of values stratified by SepsisLabel we
+  will make density plots
 
-# ── 1. Variable order and labels ─────────────────────────────────────────────
+``` r
+# Made partially with Claude Code
+# The 24 variables we've included
 plot_vars <- c(
   "HR", "MAP", "SBP", "O2Sat",
   "Resp", "FiO2", "BUN", "Creatinine",
@@ -285,6 +241,7 @@ plot_vars <- c(
   "Age", "Gender", "HospAdmTime", "ICULOS"
 )
 
+# ----------labels for each of the included variabels-----------------------
 var_labels <- c(
   HR          = "Heart Rate (bpm)",
   MAP         = "Mean Arterial Pressure (mmHg)",
@@ -312,8 +269,8 @@ var_labels <- c(
   ICULOS      = "ICU Length of Stay (hours)"
 )
 
-# ── 2. X-axis limits ──────────────────────────────────────────────────────────
-xlims <- tibble::tribble(
+# ---------------X-axis limits------------------------------------
+xlims <- tribble(
   ~variable,    ~xmin,  ~xmax,
   "HR",          0,      200,
   "MAP",         0,      150,
@@ -412,7 +369,7 @@ sepsis_long %>%
 >   over 6h and 12h
 
 ``` r
-# Variables excluded from the ML models
+# Variables excluded from the models
 excluded_variables <- c(
   "DBP", "TroponinI", "EtCO2", "PaCO2", "SaO2", "BaseExcess",
   "HCO3", "Hct", "AST", "Alkalinephos", "Bilirubin_direct", "Bilirubin_total",
@@ -429,6 +386,7 @@ ffill_dataset <- function(df) {
 }
 
 # Binary missingness indicators (1 = was NA before forward-fill)
+# No_indicator_variables are variables that are not to be included in as indicator vari
 add_indicator_columns <- function(df, outcome = "SepsisLabel") {
   No_indicator_variables <- c("patient_id", "ICULOS", outcome)
   df %>%
@@ -440,6 +398,7 @@ add_indicator_columns <- function(df, outcome = "SepsisLabel") {
 }
 
 # Rolling observation counts (6h / 12h windows)
+# Counts how many observations there were in a 6 or 12 h window
 add_obs_count_features <- function(df) {
   df %>%
     arrange(patient_id, ICULOS) %>%
@@ -471,6 +430,7 @@ add_obs_count_features <- function(df) {
 }
 
 # Rolling means (6h + 12h) and rolling SDs (6h)
+# calcs the mean or SD over a 6 or 12 h window
 add_rolling_features <- function(df) {
   df %>%
     arrange(patient_id, ICULOS) %>%
@@ -515,6 +475,12 @@ add_rolling_features <- function(df) {
 ## 4.1 Apply Preprocessing (Shared Train & Test)
 
 ``` r
+#removes all excluded variables from the training set
+#adds indicator variables
+#adds observation counters
+#forward fills
+#adds rolling features
+#Makes sepsislabel and gender a factor
 train_preprocess_ffill <- train %>%
   select(-any_of(excluded_variables)) %>%
   add_indicator_columns(outcome = "SepsisLabel") %>%
@@ -526,6 +492,8 @@ train_preprocess_ffill <- train %>%
     Gender      = as.factor(Gender)
   )
 
+
+#same for test set
 test_preprocess_ffill <- test %>%
   select(-any_of(excluded_variables)) %>%
   add_indicator_columns(outcome = "SepsisLabel") %>%
@@ -581,12 +549,19 @@ test_sirs <- test %>%
 ## 5.2 SIRS Recipe & Model
 
 ``` r
+# Creates recipe for the SIRS logistc reg model based on the 4 variables 
+# uses step impute mean to calc the global mean of each variable in training set, to be   # used in the test set as well
+# Creates the SIRS score feature and selects only SepsisLabel and SIRS_score as variables
+# Sets model to logistic regression with engine as glm and classification as it is a      # binary outcome variable
+
 SIRS_recipe <- recipe(SepsisLabel ~ HR + Temp + Resp + WBC, data = train_sirs) %>%
   step_impute_mean(all_numeric_predictors()) %>%
   step_mutate(
     SIRS_score = (HR > 90) + (Temp > 38 | Temp < 36) + (Resp > 20) + (WBC > 12 | WBC < 4)
   ) %>%
   step_select(SepsisLabel, SIRS_score)
+
+
 
 logistic_sirs_model <- logistic_reg() %>%
   set_engine("glm") %>%
@@ -596,6 +571,9 @@ logistic_sirs_model <- logistic_reg() %>%
 ## 5.3 Prep, Bake & Fit
 
 ``` r
+#preps and bakes training and test set
+#fits the baked training set
+
 Sirs_benchmark_prep          <- SIRS_recipe %>% prep(training = train_sirs)
 Sirs_benchmark_training_bake <- Sirs_benchmark_prep %>% bake(new_data = NULL)
 Sirs_benchmark_test_bake     <- Sirs_benchmark_prep %>% bake(new_data = test_sirs)
@@ -623,6 +601,9 @@ Logistic_sirs_fit
 ## 5.4 Predictions & Evaluation
 
 ``` r
+#predicts based on baked test set
+#calcs the AUC and brier
+
 prob_preds_sirs <- predict(Logistic_sirs_fit, new_data = Sirs_benchmark_test_bake, type = "prob")
 
 sirs_results <- Sirs_benchmark_test_bake %>%
@@ -793,6 +774,10 @@ log_reg_metrics
 ## 7.1 Recipe & Model
 
 ``` r
+#recipe for the XGBoost model
+#The hyperparameters for the xgboost model is found through tuning- not included in this
+#tree depth and learn_rate were the only two variables that were tuned with 500 trees
+
 sepsis_recipe_xgb <- recipe(SepsisLabel ~ ., data = train_preprocess_ffill) %>%
   step_rm(patient_id) %>%
   step_dummy(Gender) %>%
@@ -815,10 +800,6 @@ xgb_sepsis_model <- boost_tree(
 ## 7.2 Workflow & Fit
 
 ``` r
-# xgb_wf <- workflow() %>%
-#   add_recipe(sepsis_recipe_xgb) %>%
-#   add_model(xgb_sepsis_model)
-
 xgb_prep <- sepsis_recipe_xgb %>% prep(training = train_preprocess_ffill)
 train_baked_xgb  <- xgb_prep %>% bake(new_data = NULL)
 test_baked_xgb   <- xgb_prep %>% bake(new_data = test_preprocess_ffill)
@@ -895,14 +876,15 @@ xgb_metrics
 >   contrast tests
 
 ``` r
+#eval on the original test set as it has the same number and arrangement of rows as the #baked
+
 pred_list <- list(
-  "#1 Benchmark (SIRS)"                = prob_preds_sirs$.pred_1,
-  "#6 Logistic Regression"             = prob_preds_sepsis$.pred_1,
-  "#10 XGBoost (tuned)"                = prob_preds_xgb$.pred_1
-)
+  "#1 Benchmark (SIRS)"    = prob_preds_sirs$.pred_1,
+  "#6 Logistic Regression" = prob_preds_sepsis$.pred_1,
+  "#10 XGBoost (tuned)"    = prob_preds_xgb$.pred_1)
 
 
-score_evaluation <- test %>%
+score_evaluation <- test %>% 
   transmute(SepsisLabel = as.numeric(as.character(SepsisLabel)))
 
 comparison <- Score(
@@ -995,6 +977,8 @@ cat("\n=== Brier contrasts (vs #1 Benchmark) ===\n"); print(comparison$Brier$con
 > - Deviation indicates over- or under-estimation of risk
 
 ``` r
+#creates the calibration plots 
+
 cal_plot_windowed(sirs_results, truth = SepsisLabel, .pred_1,
                   event_level = "first", step_size = 0.025) + ggtitle("#1: SIRS Benchmark")
 ```
@@ -1027,20 +1011,21 @@ cal_plot_windowed(xgb_results, truth = SepsisLabel, .pred_1,
 >   “treat none”
 
 ``` r
-# DCA
-dca_df <- tibble(
-  SepsisLabel    = as.numeric(as.character(sirs_results$SepsisLabel)),
-  SIRS_Benchmark = sirs_results$.pred_1,
-  Best_LogReg    = sepsis_log_results$.pred_1,
-  XGBoost        = xgb_results$.pred_1
-)
+# DCA Curve
+dca_df <- test %>%
+  select(SepsisLabel) %>%
+  mutate(
+    SIRS_Benchmark = sirs_results$.pred_1,
+    Best_LogReg    = sepsis_log_results$.pred_1,
+    XGBoost        = xgb_results$.pred_1
+  )
 
 dca(SepsisLabel ~ SIRS_Benchmark + Best_LogReg + XGBoost, data = dca_df, thresholds = seq(0, 0.40, by = 0.005)) %>%
   plot(smooth = TRUE) +
   labs(
     title = "Decision Curve Analysis – Three-Model Comparison",
-    x     = "Threshold Probability",
-    y     = "Net Benefit (per 100 patients)"
+    x= "Threshold Probability",
+    y = "Net Benefit (per 100 patients)"
   ) +
   scale_x_continuous(breaks = seq(0, 0.40, by = 0.05), limits = c(0, 0.40), labels = scales::percent_format(accuracy = 1)) +
   scale_y_continuous(labels = function(x) x * 100) +
@@ -1064,7 +1049,7 @@ dca(SepsisLabel ~ SIRS_Benchmark + Best_LogReg + XGBoost, data = dca_df, thresho
 > - Beeswarm plot
 
 ``` r
-# Bake test data using the recipe from the fitted workflow
+# Baked test data using the recipe from the fitted workflow with 16000 samlpes
 xgb_core <- extract_fit_engine(xgb_final_fit)
 
 set.seed(42)
@@ -1117,6 +1102,7 @@ sv_importance(shap_xgb, kind = "beeswarm") +
 
 ``` r
 #CLAUDE
+#creates 4 groups of ICULOS based on the test dataset
 test_df <- test %>%
   mutate(
     iculos_bin        = cut(ICULOS, breaks = c(0, 6, 24, 72, Inf),
@@ -1127,7 +1113,7 @@ test_df <- test %>%
     prob_preds_sirs   = as.numeric(prob_preds_sirs$.pred_1)
   )
 
-# Compute AUC per bin
+# calc AUC per group with roc auc vec as it is in summarise
 auc_by_bin <- test_df %>%
   group_by(iculos_bin) %>%
   summarise(
@@ -1148,28 +1134,3 @@ auc_by_bin
     ## 2 7-24h        0.816    0.755 0.644       1791 133627
     ## 3 25-72h       0.831    0.776 0.651       1855 118707
     ## 4 >72h         0.669    0.609 0.592       1339  12639
-
-``` r
-# Pivot long for plotting
-auc_long <- auc_by_bin %>%
-  pivot_longer(
-    cols      = c(XGBoost, Logistic, SIRS),
-    names_to  = "model",
-    values_to = "AUC"
-  )
-
-# Plot
-ggplot(auc_long, aes(x = iculos_bin, y = AUC, colour = model, group = model)) +
-  geom_line(linewidth = 0.8) +
-  geom_point(size = 2.5) +
-  scale_y_continuous(limits = c(0.5, 1), breaks = seq(0.5, 1, 0.05)) +
-  labs(
-    title  = "AUC by ICULOS Bin",
-    x      = "ICULOS Bin",
-    y      = "AUC",
-    colour = "Model"
-  ) +
-  theme_bw()
-```
-
-![](Bachelor_thesis_R_Code_Notebook_files/figure-gfm/ICULOS%20Bins-1.png)<!-- -->
