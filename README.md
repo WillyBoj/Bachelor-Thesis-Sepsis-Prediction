@@ -1,7 +1,7 @@
 Sepsis Risk Prediction - Thesis Analysis Notebook
 ================
 Thesis Project
-2026-06-01
+2026-06-02
 
 - [1. Libraries](#1-libraries)
 - [2. Load Data](#2-load-data)
@@ -149,7 +149,7 @@ ggcorrplot(cor_matrix,
 ## 3.3 % of patients with at least one measurement
 
 ``` r
-#made with ChatGPT
+#made with Claude
 # % of patients with at least one measurement of each variable
 patient_coverage <- function(df, id_col = "patient_id") {
   df %>%
@@ -474,7 +474,7 @@ cat("Preprocessed train rows:", nrow(train_preprocess_ffill), "\n")
 cat("Preprocessed train columns:", ncol(train_preprocess_ffill), "\n")
 ```
 
-    ## Preprocessed train columns: 96
+    ## Preprocessed train columns: 100
 
 ``` r
 cat("Preprocessed test rows:", nrow(test_preprocess_ffill), "\n")
@@ -629,74 +629,78 @@ Logistic_sepsis_fit
     ##     data = data)
     ## 
     ## Coefficients:
-    ##            (Intercept)                      HR                   O2Sat  
-    ##             -1.710e+01               5.204e-03              -3.738e-03  
-    ##                   Temp                     SBP                     MAP  
-    ##              2.201e-01              -7.020e-04              -3.954e-03  
-    ##                   Resp                    FiO2                      pH  
-    ##             -1.538e-02               1.267e+00               3.671e-01  
-    ##                    BUN                 Calcium                Chloride  
-    ##              5.693e-03              -4.172e-02              -4.578e-03  
-    ##             Creatinine                 Glucose                 Lactate  
-    ##              3.530e-01               6.839e-04               1.002e-01  
-    ##              Magnesium               Phosphate               Potassium  
-    ##              1.295e-01              -4.291e-02              -1.317e-01  
-    ##                    Hgb                     WBC               Platelets  
-    ##             -3.954e-02               5.256e-02              -1.940e-03  
-    ##                    Age             HospAdmTime                  ICULOS  
-    ##             -4.232e-04              -3.951e-04               1.205e-02  
-    ##              was_na_HR            was_na_O2Sat             was_na_Temp  
-    ##              6.946e-02              -5.764e-02               6.871e-03  
-    ##             was_na_SBP              was_na_MAP             was_na_Resp  
-    ##              8.943e-02              -8.843e-02               5.675e-02  
-    ##            was_na_FiO2               was_na_pH              was_na_BUN  
-    ##             -1.712e-02              -1.512e-01              -2.016e-01  
-    ##         was_na_Calcium         was_na_Chloride       was_na_Creatinine  
-    ##             -5.811e-02               2.232e-01               2.127e-01  
-    ##         was_na_Glucose          was_na_Lactate        was_na_Magnesium  
-    ##              1.837e-01              -1.057e-01               4.776e-02  
-    ##       was_na_Phosphate        was_na_Potassium              was_na_Hgb  
-    ##             -2.558e-01              -8.732e-02              -1.846e-01  
-    ##             was_na_WBC        was_na_Platelets              was_na_Age  
-    ##              1.588e-01              -5.554e-02                      NA  
-    ##          was_na_Gender      was_na_HospAdmTime               HR_obs_6h  
-    ##                     NA              -8.627e+00               6.050e-02  
-    ##            Temp_obs_6h             Resp_obs_6h              MAP_obs_6h  
-    ##             -8.800e-02               2.178e-02               3.694e-02  
-    ##             SBP_obs_6h              WBC_obs_6h             FiO2_obs_6h  
-    ##             -3.971e-02              -4.466e-02               1.650e-01  
-    ##         Lactate_obs_6h        Platelets_obs_6h       Creatinine_obs_6h  
-    ##              2.113e-01               6.230e-02               1.279e-01  
-    ##             HR_obs_12h            Temp_obs_12h            Resp_obs_12h  
-    ##             -8.240e-02              -2.736e-02              -6.261e-02  
-    ##            MAP_obs_12h             SBP_obs_12h             WBC_obs_12h  
-    ##              1.222e-01              -6.048e-02              -5.821e-02  
-    ##           FiO2_obs_12h         Lactate_obs_12h            total_obs_6h  
-    ##              4.836e-02               2.905e-02                      NA  
-    ##         HR_roll_mean_6        Temp_roll_mean_6        Resp_roll_mean_6  
-    ##             -5.574e-04               3.720e-01              -1.986e-03  
-    ##        MAP_roll_mean_6         SBP_roll_mean_6         WBC_roll_mean_6  
-    ##             -8.288e-04              -1.622e-03               2.395e-03  
-    ##       FiO2_roll_mean_6     Lactate_roll_mean_6   Platelets_roll_mean_6  
-    ##             -2.258e-01               1.296e-01               1.036e-03  
-    ## Creatinine_roll_mean_6         HR_roll_mean_12       Temp_roll_mean_12  
-    ##             -3.029e-01               6.554e-04              -2.725e-01  
-    ##      Resp_roll_mean_12        MAP_roll_mean_12        SBP_roll_mean_12  
-    ##              3.746e-02              -8.243e-03               4.203e-03  
-    ##       WBC_roll_mean_12       FiO2_roll_mean_12    Lactate_roll_mean_12  
-    ##             -5.039e-02              -1.042e+00              -2.970e-01  
-    ##           HR_roll_sd_6          Temp_roll_sd_6          Resp_roll_sd_6  
-    ##              1.391e-02               3.642e-01              -2.249e-02  
-    ##          MAP_roll_sd_6           SBP_roll_sd_6           WBC_roll_sd_6  
-    ##              7.117e-03               1.928e-02               3.949e-02  
-    ##         FiO2_roll_sd_6       Lactate_roll_sd_6     Platelets_roll_sd_6  
-    ##              2.772e-03              -2.485e-01               4.811e-04  
-    ##   Creatinine_roll_sd_6               Gender_X1              SIRS_score  
-    ##              2.750e-01               6.983e-02               2.544e-01  
+    ##             (Intercept)                       HR                    O2Sat  
+    ##              -1.689e+01                5.205e-03               -3.526e-03  
+    ##                    Temp                      SBP                      MAP  
+    ##               2.199e-01               -7.162e-04               -3.935e-03  
+    ##                    Resp                     FiO2                       pH  
+    ##              -1.539e-02                1.263e+00                3.489e-01  
+    ##                     BUN                  Calcium                 Chloride  
+    ##               5.671e-03               -4.188e-02               -4.713e-03  
+    ##              Creatinine                  Glucose                  Lactate  
+    ##               2.920e-01                6.892e-04                9.780e-02  
+    ##               Magnesium                Phosphate                Potassium  
+    ##               1.267e-01               -4.301e-02               -1.358e-01  
+    ##                     Hgb                      WBC                Platelets  
+    ##              -4.016e-02                5.481e-02               -2.997e-03  
+    ##                     Age              HospAdmTime                   ICULOS  
+    ##              -4.519e-04               -3.957e-04                1.201e-02  
+    ##               was_na_HR             was_na_O2Sat              was_na_Temp  
+    ##               6.742e-02               -5.657e-02                7.239e-03  
+    ##              was_na_SBP               was_na_MAP              was_na_Resp  
+    ##               8.786e-02               -8.759e-02                5.765e-02  
+    ##             was_na_FiO2                was_na_pH               was_na_BUN  
+    ##              -1.705e-02               -1.493e-01               -1.993e-01  
+    ##          was_na_Calcium          was_na_Chloride        was_na_Creatinine  
+    ##              -5.942e-02                2.242e-01                2.089e-01  
+    ##          was_na_Glucose           was_na_Lactate         was_na_Magnesium  
+    ##               1.827e-01               -1.022e-01                4.971e-02  
+    ##        was_na_Phosphate         was_na_Potassium               was_na_Hgb  
+    ##              -2.585e-01               -9.003e-02               -1.880e-01  
+    ##              was_na_WBC         was_na_Platelets               was_na_Age  
+    ##               1.655e-01               -5.079e-02                       NA  
+    ##           was_na_Gender       was_na_HospAdmTime                HR_obs_6h  
+    ##                      NA               -8.628e+00                5.980e-02  
+    ##             Temp_obs_6h              Resp_obs_6h               MAP_obs_6h  
+    ##              -8.703e-02                2.125e-02                3.757e-02  
+    ##              SBP_obs_6h               WBC_obs_6h              FiO2_obs_6h  
+    ##              -4.027e-02               -1.159e-01                1.659e-01  
+    ##          Lactate_obs_6h         Platelets_obs_6h        Creatinine_obs_6h  
+    ##               2.079e-01                1.598e-01                1.214e-01  
+    ##              HR_obs_12h             Temp_obs_12h             Resp_obs_12h  
+    ##              -8.146e-02               -2.733e-02               -6.244e-02  
+    ##             MAP_obs_12h              SBP_obs_12h              WBC_obs_12h  
+    ##               1.210e-01               -5.955e-02                4.850e-03  
+    ##            FiO2_obs_12h          Lactate_obs_12h        Platelets_obs_12h  
+    ##               4.766e-02                3.214e-02               -8.593e-02  
+    ##      Creatinine_obs_12h             total_obs_6h           HR_roll_mean_6  
+    ##               1.809e-03                       NA               -4.611e-04  
+    ##        Temp_roll_mean_6         Resp_roll_mean_6          MAP_roll_mean_6  
+    ##               3.705e-01               -2.454e-03               -8.204e-04  
+    ##         SBP_roll_mean_6          WBC_roll_mean_6         FiO2_roll_mean_6  
+    ##              -1.690e-03               -8.484e-03               -2.325e-01  
+    ##     Lactate_roll_mean_6    Platelets_roll_mean_6   Creatinine_roll_mean_6  
+    ##               1.408e-01                6.443e-03                1.315e-02  
+    ##         HR_roll_mean_12        Temp_roll_mean_12        Resp_roll_mean_12  
+    ##               4.982e-04               -2.719e-01                3.785e-02  
+    ##        MAP_roll_mean_12         SBP_roll_mean_12         WBC_roll_mean_12  
+    ##              -8.241e-03                4.281e-03               -4.179e-02  
+    ##       FiO2_roll_mean_12     Lactate_roll_mean_12   Platelets_roll_mean_12  
+    ##              -1.030e+00               -3.053e-01               -4.387e-03  
+    ## Creatinine_roll_mean_12             HR_roll_sd_6           Temp_roll_sd_6  
+    ##              -2.552e-01                1.394e-02                3.651e-01  
+    ##          Resp_roll_sd_6            MAP_roll_sd_6            SBP_roll_sd_6  
+    ##              -2.257e-02                7.123e-03                1.928e-02  
+    ##           WBC_roll_sd_6           FiO2_roll_sd_6        Lactate_roll_sd_6  
+    ##               4.084e-02                2.127e-02               -2.461e-01  
+    ##     Platelets_roll_sd_6     Creatinine_roll_sd_6                Gender_X1  
+    ##               6.429e-04                2.686e-01                6.938e-02  
+    ##              SIRS_score  
+    ##               2.550e-01  
     ## 
-    ## Degrees of Freedom: 1242523 Total (i.e. Null);  1242431 Residual
+    ## Degrees of Freedom: 1242523 Total (i.e. Null);  1242427 Residual
     ## Null Deviance:       223200 
-    ## Residual Deviance: 196400    AIC: 196600
+    ## Residual Deviance: 196300    AIC: 196500
 
 ## 6.3 Predictions & Evaluation
 
@@ -788,7 +792,7 @@ xgb_final_fit
     ##     subsample = 1, nthread = 1, eval_metric = "auc", objective = "binary:logistic"), 
     ##     data = x$data, nrounds = 500, evals = x$watchlist, verbose = 0, 
     ##     early_stopping_rounds = 20)
-    ## # of features: 95 
+    ## # of features: 99 
     ## # of rounds:  500 
     ## xgb.attributes:
     ##    best_iteration, best_score 
@@ -798,10 +802,10 @@ xgb_final_fit
     ##   iter validation_auc
     ##  <num>          <num>
     ##      1      0.7779041
-    ##      2      0.7830186
+    ##      2      0.7830109
     ##    ---            ---
-    ##    499      0.8855474
-    ##    500      0.8856605
+    ##    499      0.8849447
+    ##    500      0.8849979
 
 ## 7.3 Predictions & Evaluation
 
@@ -875,7 +879,7 @@ summary(comparison)
     ## 3: Logistic Regression     SIRS Benchmark  13.9 [13.2;14.6] < 0.001
     ## 4:     XGBoost (tuned)          Null model                         
     ## 5:     XGBoost (tuned)     SIRS Benchmark  19.4 [18.7;20.1] < 0.001
-    ## 6:     XGBoost (tuned) Logistic Regression    5.5 [5.0;6.0] < 0.001
+    ## 6:     XGBoost (tuned) Logistic Regression    5.5 [5.0;5.9] < 0.001
     ##     delta Brier (%) p-value
     ##              <char>  <char>
     ## 1: -0.0 [-0.0;-0.0] < 0.001
@@ -894,14 +898,14 @@ cat("\n=== AUC contrasts (vs #1 Benchmark) ===\n");   print(comparison$AUC$contr
 
     ##                  model           reference  delta.AUC          se      lower
     ##                 <char>              <char>      <num>       <num>      <num>
-    ## 1: Logistic Regression     SIRS Benchmark  0.13913625 0.003624920 0.13203154
-    ## 2:     XGBoost (tuned)     SIRS Benchmark  0.19409280 0.003702038 0.18683694
-    ## 3:     XGBoost (tuned) Logistic Regression 0.05495655 0.002328422 0.05039292
+    ## 1: Logistic Regression     SIRS Benchmark  0.13889093 0.003625302 0.13178547
+    ## 2:     XGBoost (tuned)     SIRS Benchmark  0.19380908 0.003705596 0.18654625
+    ## 3:     XGBoost (tuned) Logistic Regression 0.05491815 0.002319208 0.05037259
     ##         upper             p
     ##         <num>         <num>
-    ## 1: 0.14624096 2.470328e-322
-    ## 2: 0.20134866  0.000000e+00
-    ## 3: 0.05952017 3.634233e-123
+    ## 1: 0.14599640 3.932763e-321
+    ## 2: 0.20107192  0.000000e+00
+    ## 3: 0.05946371 5.836671e-124
 
 ``` r
 cat("\n=== Brier contrasts (vs #1 Benchmark) ===\n"); print(comparison$Brier$contrasts)
@@ -913,19 +917,19 @@ cat("\n=== Brier contrasts (vs #1 Benchmark) ===\n"); print(comparison$Brier$con
     ##                  model           reference   delta.Brier           se
     ##                 <fctr>              <fctr>         <num>        <num>
     ## 1:     SIRS Benchmark           Null model -0.0001314236 7.220196e-06
-    ## 2: Logistic Regression          Null model -0.0002795670 4.014077e-05
-    ## 3:     XGBoost (tuned)          Null model -0.0009021257 5.260719e-05
-    ## 4: Logistic Regression     SIRS Benchmark  -0.0001481434 3.789413e-05
-    ## 5:     XGBoost (tuned)     SIRS Benchmark  -0.0007707021 5.017663e-05
-    ## 6:     XGBoost (tuned) Logistic Regression -0.0006225587 4.002520e-05
+    ## 2: Logistic Regression          Null model -0.0002836593 4.028065e-05
+    ## 3:     XGBoost (tuned)          Null model -0.0009050545 5.362384e-05
+    ## 4: Logistic Regression     SIRS Benchmark  -0.0001522357 3.802489e-05
+    ## 5:     XGBoost (tuned)     SIRS Benchmark  -0.0007736309 5.118414e-05
+    ## 6:     XGBoost (tuned) Logistic Regression -0.0006213952 4.068477e-05
     ##            lower         upper            p
     ##            <num>         <num>        <num>
     ## 1: -0.0001455749 -1.172723e-04 4.955362e-74
-    ## 2: -0.0003582415 -2.008925e-04 3.291893e-12
-    ## 3: -0.0010052339 -7.990175e-04 6.467912e-66
-    ## 4: -0.0002224145 -7.387225e-05 9.252493e-05
-    ## 5: -0.0008690465 -6.723577e-04 3.045885e-53
-    ## 6: -0.0007010067 -5.441108e-04 1.490749e-54
+    ## 2: -0.0003626079 -2.047107e-04 1.893994e-12
+    ## 3: -0.0010101553 -7.999537e-04 6.549971e-64
+    ## 4: -0.0002267631 -7.770828e-05 6.239102e-05
+    ## 5: -0.0008739500 -6.733118e-04 1.296344e-51
+    ## 6: -0.0007011359 -5.416545e-04 1.149971e-52
 
 ------------------------------------------------------------------------
 
@@ -1082,7 +1086,7 @@ auc_by_bin
     ## # A tibble: 4 × 6
     ##   iculos_bin XGBoost Logistic  SIRS n_positive  n_obs
     ##   <fct>        <dbl>    <dbl> <dbl>      <int>  <int>
-    ## 1 1-6h         0.758    0.679 0.596        673  44713
-    ## 2 7-24h        0.818    0.755 0.644       1791 133627
-    ## 3 25-72h       0.836    0.776 0.651       1855 118707
-    ## 4 >72h         0.664    0.609 0.592       1339  12639
+    ## 1 1-6h         0.759    0.678 0.596        673  44713
+    ## 2 7-24h        0.817    0.754 0.644       1791 133627
+    ## 3 25-72h       0.836    0.778 0.651       1855 118707
+    ## 4 >72h         0.664    0.607 0.592       1339  12639
