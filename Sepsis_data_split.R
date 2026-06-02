@@ -7,6 +7,8 @@ set.seed(501)
 # For hver patient, giv mig én række, og sæt SepsisLabel til den højeste værdi patienten
 #fjern gruppering med "drop"
 #
+
+
 patients <- sepsis_data %>%
   group_by(patient_id) %>%
   summarise(SepsisLabel = max(SepsisLabel), .groups = "drop")
@@ -19,7 +21,7 @@ train_patients <- training(patient_split)
 test_patients  <- testing(patient_split)
 
 # koble id tilbage sammen med data med semi_join
-# chatgpt suggestion()
+# claude suggestion()
 train_data <- sepsis_data %>%
   semi_join(train_patients, by = "patient_id")
 
