@@ -76,15 +76,13 @@ library(probably)
 
 # 2. Load Data
 
-> - `sepsis_data` - full dataset, used only for correlations, data
->   missingness and density plots in Section 3
 > - `train` / `test` - Sets used for all modelling
 
 ------------------------------------------------------------------------
 
 # 3. Exploratory: Correlation & Missingness
 
-> - Explores the full dataset before any modelling
+> - Explores the training dataset before any modelling
 > - Used to decide which variables to include and which to exclude
 
 ## 3.1 Missing Data Summary
@@ -97,7 +95,7 @@ library(probably)
 #change from wide to long format
 #Sort by descendfing order
 
-missing_summary <- sepsis_data %>%
+missing_summary <- train %>%
   summarize(across(everything(), ~ mean(is.na(.x)) * 100)) %>%
   pivot_longer(everything(), names_to = "variable", values_to = "pct_missing") %>%
   arrange(desc(pct_missing))
@@ -105,20 +103,20 @@ missing_summary <- sepsis_data %>%
 missing_summary
 ```
 
-    ## # A tibble: 43 × 2
+    ## # A tibble: 42 × 2
     ##    variable         pct_missing
     ##    <chr>                  <dbl>
-    ##  1 Bilirubin_direct        99.8
+    ##  1 Bilirubin_direct       100.0
     ##  2 Fibrinogen              99.3
-    ##  3 TroponinI               99.0
+    ##  3 TroponinI               99.1
     ##  4 Bilirubin_total         98.5
     ##  5 Alkalinephos            98.4
     ##  6 AST                     98.4
     ##  7 Lactate                 97.3
-    ##  8 PTT                     97.1
+    ##  8 PTT                     97.0
     ##  9 SaO2                    96.5
     ## 10 EtCO2                   96.3
-    ## # ℹ 33 more rows
+    ## # ℹ 32 more rows
 
 ## 3.2 Pairwise Correlation
 
@@ -130,8 +128,8 @@ missing_summary
 #select all numeric variables except sepsislabel
 #calc pairwise correlation with speaman correlation
 
-cor_matrix <- sepsis_data %>%
-  select(where(is.numeric), -SepsisLabel) %>%
+cor_matrix <- train %>%
+  select(where(is.numeric), -SepsisLabel, -patient_id) %>%
   cor(use = "pairwise.complete.obs", method = "spearman")
 ```
 
@@ -152,31 +150,33 @@ ggcorrplot(cor_matrix,
 #made with Claude
 # % of patients with at least one measurement of each variable
 patient_coverage <- function(df, id_col = "patient_id") {
+  n_pat <- length(unique(df[[id_col]]))
   df %>%
     group_by(.data[[id_col]]) %>%
     summarise(across(everything(), ~ any(!is.na(.x))), .groups = "drop") %>%
-    summarise(across(-all_of(id_col), ~ mean(.x) * 100)) %>%  
-    pivot_longer(everything(), names_to = "variable", values_to = "pct_coverage") %>%
-    arrange(desc(pct_coverage))
+    summarise(across(-all_of(id_col), ~ sum(.x))) %>%
+    pivot_longer(everything(), names_to = "variable", values_to = "n") %>%
+    mutate(coverage = sprintf("%d (%.1f%%)", n, n / n_pat * 100)) %>%
+    arrange(desc(n))
 }
 
-patient_coverage(sepsis_data, id_col = "patient_id")
+patient_coverage(train, id_col = "patient_id")
 ```
 
-    ## # A tibble: 42 × 2
-    ##    variable    pct_coverage
-    ##    <chr>              <dbl>
-    ##  1 Age                100  
-    ##  2 Gender             100  
-    ##  3 ICULOS             100  
-    ##  4 SepsisLabel        100  
-    ##  5 source             100  
-    ##  6 HospAdmTime        100.0
-    ##  7 HR                 100.0
-    ##  8 O2Sat              100.0
-    ##  9 Resp                99.8
-    ## 10 MAP                 99.7
-    ## # ℹ 32 more rows
+    ## # A tibble: 41 × 3
+    ##    variable        n coverage      
+    ##    <chr>       <int> <chr>         
+    ##  1 Age         32268 32268 (100.0%)
+    ##  2 Gender      32268 32268 (100.0%)
+    ##  3 ICULOS      32268 32268 (100.0%)
+    ##  4 SepsisLabel 32268 32268 (100.0%)
+    ##  5 HospAdmTime 32267 32267 (100.0%)
+    ##  6 HR          32263 32263 (100.0%)
+    ##  7 O2Sat       32253 32253 (100.0%)
+    ##  8 Resp        32210 32210 (99.8%) 
+    ##  9 MAP         32179 32179 (99.7%) 
+    ## 10 Temp        32053 32053 (99.3%) 
+    ## # ℹ 31 more rows
 
 ## 3.4 Density plots
 
@@ -254,7 +254,7 @@ xlims <- tribble(
 )
 
 # ── 3. Pivot to long and clip values to x limits ──────────────────────────────
-sepsis_long <- sepsis_data %>%
+sepsis_long <- train %>%
   select(all_of(c(plot_vars, "SepsisLabel"))) %>%
   pivot_longer(
     cols      = all_of(plot_vars),
@@ -983,9 +983,9 @@ dca_df <- test %>%
 dca(SepsisLabel ~ SIRS_Benchmark + Best_LogReg + XGBoost, data = dca_df, thresholds = seq(0, 0.40, by = 0.005)) %>%
   plot(smooth = TRUE) +
   labs(
-    title = "Decision Curve Analysis – Three-Model Comparison",
+    title = "Decision Curve Analysis",
     x= "Threshold Probability",
-    y = "Net Benefit (per 100 patients)"
+    y = "Net Benefit (per 100 patient observations)"
   ) +
   scale_x_continuous(breaks = seq(0, 0.40, by = 0.05), limits = c(0, 0.40), labels = scales::percent_format(accuracy = 1)) +
   scale_y_continuous(labels = function(x) x * 100) +
