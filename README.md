@@ -1,7 +1,7 @@
 Sepsis Risk Prediction - Thesis Analysis Notebook
 ================
 Thesis Project
-2026-05-19
+2026-06-01
 
 - [1. Libraries](#1-libraries)
 - [2. Load Data](#2-load-data)
@@ -12,8 +12,8 @@ Thesis Project
   - [3.3 % of patients with at least one
     measurement](#33--of-patients-with-at-least-one-measurement)
   - [3.4 Density plots](#34-density-plots)
-- [4. Shared Preprocessing Functions (LogReg &
-  XGBoost)](#4-shared-preprocessing-functions-logreg--xgboost)
+- [4. Shared Preprocessing steps (Logreg &
+  XGBoost)](#4-shared-preprocessing-steps-logreg--xgboost)
   - [4.1 Apply Preprocessing (Shared Train &
     Test)](#41-apply-preprocessing-shared-train--test)
 - [5. Benchmark - SIRS Logistic
@@ -38,6 +38,8 @@ Thesis Project
 - [11. Timing of detection ICULOS
   Bins](#11-timing-of-detection-iculos-bins)
 
+**Generative AI has been used throughout the code for the project**
+
 ------------------------------------------------------------------------
 
 > **Research question:** How well does a machine-learning and classical
@@ -61,61 +63,14 @@ Thesis Project
 
 ``` r
 library(tidyverse)       
-```
-
-    ## ── Attaching core tidyverse packages ──────────────────────── tidyverse 2.0.0 ──
-    ## ✔ dplyr     1.2.1     ✔ readr     2.2.0
-    ## ✔ forcats   1.0.1     ✔ stringr   1.6.0
-    ## ✔ ggplot2   4.0.3     ✔ tibble    3.3.1
-    ## ✔ lubridate 1.9.5     ✔ tidyr     1.3.2
-    ## ✔ purrr     1.2.2     
-    ## ── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
-    ## ✖ dplyr::filter() masks stats::filter()
-    ## ✖ dplyr::lag()    masks stats::lag()
-    ## ℹ Use the conflicted package (<http://conflicted.r-lib.org/>) to force all conflicts to become errors
-
-``` r
 library(tidymodels)      
-```
-
-    ## ── Attaching packages ────────────────────────────────────── tidymodels 1.5.0 ──
-    ## ✔ broom        1.0.12     ✔ rsample      1.3.2 
-    ## ✔ dials        1.4.3      ✔ tailor       0.1.0 
-    ## ✔ infer        1.1.0      ✔ tune         2.1.0 
-    ## ✔ modeldata    1.5.1      ✔ workflows    1.3.0 
-    ## ✔ parsnip      1.5.0      ✔ workflowsets 1.1.1 
-    ## ✔ recipes      1.3.2      ✔ yardstick    1.4.0 
-    ## ── Conflicts ───────────────────────────────────────── tidymodels_conflicts() ──
-    ## ✖ scales::discard() masks purrr::discard()
-    ## ✖ dplyr::filter()   masks stats::filter()
-    ## ✖ recipes::fixed()  masks stringr::fixed()
-    ## ✖ dplyr::lag()      masks stats::lag()
-    ## ✖ yardstick::spec() masks readr::spec()
-    ## ✖ recipes::step()   masks stats::step()
-
-``` r
 library(slider)          
 library(ggcorrplot)      
 library(riskRegression)  
-```
-
-    ## Registered S3 method overwritten by 'riskRegression':
-    ##   method        from 
-    ##   nobs.multinom broom
-    ## riskRegression version 2026.03.11
-
-``` r
 library(dcurves)         
 library(shapviz)
 library(probably)
 ```
-
-    ## 
-    ## Attaching package: 'probably'
-    ## 
-    ## The following objects are masked from 'package:base':
-    ## 
-    ##     as.factor, as.ordered
 
 ------------------------------------------------------------------------
 
@@ -356,7 +311,7 @@ sepsis_long %>%
 
 ------------------------------------------------------------------------
 
-# 4. Shared Preprocessing Functions (LogReg & XGBoost)
+# 4. Shared Preprocessing steps (Logreg & XGBoost)
 
 > - Excluded variables - sparse or clinically redundant features removed
 > - Missingness indicators - binary indicators showing which values were
@@ -399,6 +354,7 @@ add_indicator_columns <- function(df, outcome = "SepsisLabel") {
 
 # Rolling observation counts (6h / 12h windows)
 # Counts how many observations there were in a 6 or 12 h window
+# Based on code provided by our Co-supervisor
 add_obs_count_features <- function(df) {
   df %>%
     arrange(patient_id, ICULOS) %>%
@@ -422,6 +378,8 @@ add_obs_count_features <- function(df) {
       WBC_obs_12h        = slide_int(WBC,        ~sum(!is.na(.x)), .before = 11, .complete = FALSE),
       FiO2_obs_12h       = slide_int(FiO2,       ~sum(!is.na(.x)), .before = 11, .complete = FALSE),
       Lactate_obs_12h    = slide_int(Lactate,    ~sum(!is.na(.x)), .before = 11, .complete = FALSE),
+      Platelets_obs_12h  = slide_int(Platelets,  ~sum(!is.na(.x)), .before = 11,  .complete = FALSE),
+      Creatinine_obs_12h = slide_int(Creatinine, ~sum(!is.na(.x)), .before = 11,  .complete = FALSE),
       total_obs_6h       = HR_obs_6h + Temp_obs_6h + Resp_obs_6h + MAP_obs_6h +
                            SBP_obs_6h + WBC_obs_6h + FiO2_obs_6h + Lactate_obs_6h +
                            Platelets_obs_6h + Creatinine_obs_6h
@@ -456,6 +414,8 @@ add_rolling_features <- function(df) {
       WBC_roll_mean_12       = slide_dbl(WBC,        ~mean(.x, na.rm = TRUE), .before = 11, .complete = FALSE),
       FiO2_roll_mean_12      = slide_dbl(FiO2,       ~mean(.x, na.rm = TRUE), .before = 11, .complete = FALSE),
       Lactate_roll_mean_12   = slide_dbl(Lactate,    ~mean(.x, na.rm = TRUE), .before = 11, .complete = FALSE),
+      Platelets_roll_mean_12 = slide_dbl(Platelets,  ~mean(.x, na.rm = TRUE), .before = 11,  .complete = FALSE),
+      Creatinine_roll_mean_12= slide_dbl(Creatinine, ~mean(.x, na.rm = TRUE), .before = 11,  .complete = FALSE),
       # 6h rolling SDs
       HR_roll_sd_6           = slide_dbl(HR,         ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
       Temp_roll_sd_6         = slide_dbl(Temp,       ~sd(.x, na.rm = TRUE), .before = 5, .complete = FALSE),
@@ -528,9 +488,8 @@ cat("Preprocessed test rows:", nrow(test_preprocess_ffill), "\n")
 
 > - SIRS criteria: HR \> 90, Temp outside 36-38°C, RR \> 20, WBC outside
 >   4-12
-> - Each met criterion adds 1, giving a score of 0-4
+> - Each met criteria adds 1, giving a score of 0-4
 > - Score used as the sole predictor in a logistic regression
-> - Represents traditional clinical sepsis screening practice
 
 ## 5.1 SIRS-Specific Preprocessing
 
@@ -767,15 +726,15 @@ log_reg_metrics
 # 7. XGBoost
 
 > - Uses the same feature set as the logistic regression
-> - Hyperparameters from prior tuning: 500 trees, depth 7, learning rate
->   0.012, early stopping at 20 rounds
+> - Hyperparameters from prior tuning: 500 trees, depth 5, learning rate
+>   0.026, early stopping at 20 rounds
 > - 10% internal validation split used for early stopping
 
 ## 7.1 Recipe & Model
 
 ``` r
 #recipe for the XGBoost model
-#The hyperparameters for the xgboost model is found through tuning- not included in this
+#The hyperparameters for the xgboost model is found through tuning- not included in this code
 #tree depth and learn_rate were the only two variables that were tuned with 500 trees
 
 sepsis_recipe_xgb <- recipe(SepsisLabel ~ ., data = train_preprocess_ffill) %>%
@@ -789,8 +748,8 @@ sepsis_recipe_xgb <- recipe(SepsisLabel ~ ., data = train_preprocess_ffill) %>%
 
 xgb_sepsis_model <- boost_tree(
   trees      = 500,
-  tree_depth = 7,
-  learn_rate = 0.01209315,
+  tree_depth = 5,
+  learn_rate = 0.02635494,
   stop_iter  = 20
 ) %>%
   set_engine("xgboost", counts = FALSE, eval_metric = "auc", validation = 0.1) %>%
@@ -824,7 +783,7 @@ xgb_final_fit
     ## ── Model ───────────────────────────────────────────────────────────────────────
     ## ##### xgb.Booster
     ## call:
-    ##   xgboost::xgb.train(params = list(eta = 0.01209315, max_depth = 7, 
+    ##   xgboost::xgb.train(params = list(eta = 0.02635494, max_depth = 5, 
     ##     gamma = 0, colsample_bytree = 1, colsample_bynode = 1, min_child_weight = 1, 
     ##     subsample = 1, nthread = 1, eval_metric = "auc", objective = "binary:logistic"), 
     ##     data = x$data, nrounds = 500, evals = x$watchlist, verbose = 0, 
@@ -838,11 +797,11 @@ xgb_final_fit
     ## evaluation_log:
     ##   iter validation_auc
     ##  <num>          <num>
-    ##      1      0.7926706
-    ##      2      0.7949864
+    ##      1      0.7779041
+    ##      2      0.7830186
     ##    ---            ---
-    ##    499      0.9032971
-    ##    500      0.9033624
+    ##    499      0.8855474
+    ##    500      0.8856605
 
 ## 7.3 Predictions & Evaluation
 
@@ -864,7 +823,7 @@ xgb_metrics
     ## # A tibble: 2 × 3
     ##   .metric     .estimator .estimate
     ##   <chr>       <chr>          <dbl>
-    ## 1 roc_auc     binary        0.835 
+    ## 1 roc_auc     binary        0.837 
     ## 2 brier_class binary        0.0170
 
 ------------------------------------------------------------------------
@@ -879,21 +838,21 @@ xgb_metrics
 #eval on the original test set as it has the same number and arrangement of rows as the #baked
 
 pred_list <- list(
-  "#1 Benchmark (SIRS)"    = prob_preds_sirs$.pred_1,
-  "#6 Logistic Regression" = prob_preds_sepsis$.pred_1,
-  "#10 XGBoost (tuned)"    = prob_preds_xgb$.pred_1)
+  "SIRS Benchmark " = prob_preds_sirs$.pred_1,
+  "Logistic Regression" = prob_preds_sepsis$.pred_1,
+  "XGBoost (tuned)" = prob_preds_xgb$.pred_1)
 
 
 score_evaluation <- test %>% 
   transmute(SepsisLabel = as.numeric(as.character(SepsisLabel)))
 
 comparison <- Score(
-  object    = pred_list,
-  formula   = SepsisLabel ~ 1,
-  data      = score_evaluation,
-  metrics   = c("auc", "brier"),
+  object = pred_list,
+  formula = SepsisLabel ~ 1,
+  data = score_evaluation,
+  metrics = c("auc", "brier"),
   contrasts = TRUE,
-  plots     = "calibration"
+  plots = "calibration"
 )
 
 summary(comparison)
@@ -901,22 +860,22 @@ summary(comparison)
 
     ## $score
     ## Key: <Model>
-    ##                     Model          AUC (%)     Brier (%)
-    ##                    <fctr>           <char>        <char>
-    ## 1:             Null model             <NA> 1.8 [1.7;1.8]
-    ## 2:    #1 Benchmark (SIRS) 64.3 [63.6;65.0] 1.8 [1.7;1.8]
-    ## 3: #6 Logistic Regression 78.2 [77.6;78.8] 1.8 [1.7;1.8]
-    ## 4:    #10 XGBoost (tuned) 83.5 [83.0;84.0] 1.7 [1.7;1.7]
+    ##                  Model          AUC (%)     Brier (%)
+    ##                 <fctr>           <char>        <char>
+    ## 1:          Null model             <NA> 1.8 [1.7;1.8]
+    ## 2:     SIRS Benchmark  64.3 [63.6;65.0] 1.8 [1.7;1.8]
+    ## 3: Logistic Regression 78.2 [77.6;78.8] 1.8 [1.7;1.8]
+    ## 4:     XGBoost (tuned) 83.7 [83.2;84.2] 1.7 [1.7;1.7]
     ## 
     ## $contrasts
-    ##                     Model              Reference    delta AUC (%) p-value
-    ##                    <fctr>                 <char>           <char>  <char>
-    ## 1:    #1 Benchmark (SIRS)             Null model                         
-    ## 2: #6 Logistic Regression             Null model                         
-    ## 3: #6 Logistic Regression    #1 Benchmark (SIRS) 13.9 [13.2;14.6] < 0.001
-    ## 4:    #10 XGBoost (tuned)             Null model                         
-    ## 5:    #10 XGBoost (tuned)    #1 Benchmark (SIRS) 19.2 [18.5;19.9] < 0.001
-    ## 6:    #10 XGBoost (tuned) #6 Logistic Regression    5.3 [4.8;5.8] < 0.001
+    ##                  Model           Reference    delta AUC (%) p-value
+    ##                 <fctr>              <char>           <char>  <char>
+    ## 1:     SIRS Benchmark           Null model                         
+    ## 2: Logistic Regression          Null model                         
+    ## 3: Logistic Regression     SIRS Benchmark  13.9 [13.2;14.6] < 0.001
+    ## 4:     XGBoost (tuned)          Null model                         
+    ## 5:     XGBoost (tuned)     SIRS Benchmark  19.4 [18.7;20.1] < 0.001
+    ## 6:     XGBoost (tuned) Logistic Regression    5.5 [5.0;6.0] < 0.001
     ##     delta Brier (%) p-value
     ##              <char>  <char>
     ## 1: -0.0 [-0.0;-0.0] < 0.001
@@ -933,16 +892,16 @@ cat("\n=== AUC contrasts (vs #1 Benchmark) ===\n");   print(comparison$AUC$contr
     ## 
     ## === AUC contrasts (vs #1 Benchmark) ===
 
-    ##                     model              reference  delta.AUC          se
-    ##                    <char>                 <char>      <num>       <num>
-    ## 1: #6 Logistic Regression    #1 Benchmark (SIRS) 0.13913625 0.003624920
-    ## 2:    #10 XGBoost (tuned)    #1 Benchmark (SIRS) 0.19203146 0.003761451
-    ## 3:    #10 XGBoost (tuned) #6 Logistic Regression 0.05289521 0.002349553
-    ##         lower      upper             p
-    ##         <num>      <num>         <num>
-    ## 1: 0.13203154 0.14624096 2.470328e-322
-    ## 2: 0.18465915 0.19940377  0.000000e+00
-    ## 3: 0.04829017 0.05750025 3.104581e-112
+    ##                  model           reference  delta.AUC          se      lower
+    ##                 <char>              <char>      <num>       <num>      <num>
+    ## 1: Logistic Regression     SIRS Benchmark  0.13913625 0.003624920 0.13203154
+    ## 2:     XGBoost (tuned)     SIRS Benchmark  0.19409280 0.003702038 0.18683694
+    ## 3:     XGBoost (tuned) Logistic Regression 0.05495655 0.002328422 0.05039292
+    ##         upper             p
+    ##         <num>         <num>
+    ## 1: 0.14624096 2.470328e-322
+    ## 2: 0.20134866  0.000000e+00
+    ## 3: 0.05952017 3.634233e-123
 
 ``` r
 cat("\n=== Brier contrasts (vs #1 Benchmark) ===\n"); print(comparison$Brier$contrasts)
@@ -951,22 +910,22 @@ cat("\n=== Brier contrasts (vs #1 Benchmark) ===\n"); print(comparison$Brier$con
     ## 
     ## === Brier contrasts (vs #1 Benchmark) ===
 
-    ##                     model              reference   delta.Brier           se
-    ##                    <fctr>                 <fctr>         <num>        <num>
-    ## 1:    #1 Benchmark (SIRS)             Null model -0.0001314236 7.220196e-06
-    ## 2: #6 Logistic Regression             Null model -0.0002795670 4.014077e-05
-    ## 3:    #10 XGBoost (tuned)             Null model -0.0009123703 4.813875e-05
-    ## 4: #6 Logistic Regression    #1 Benchmark (SIRS) -0.0001481434 3.789413e-05
-    ## 5:    #10 XGBoost (tuned)    #1 Benchmark (SIRS) -0.0007809467 4.581853e-05
-    ## 6:    #10 XGBoost (tuned) #6 Logistic Regression -0.0006328033 3.786735e-05
+    ##                  model           reference   delta.Brier           se
+    ##                 <fctr>              <fctr>         <num>        <num>
+    ## 1:     SIRS Benchmark           Null model -0.0001314236 7.220196e-06
+    ## 2: Logistic Regression          Null model -0.0002795670 4.014077e-05
+    ## 3:     XGBoost (tuned)          Null model -0.0009021257 5.260719e-05
+    ## 4: Logistic Regression     SIRS Benchmark  -0.0001481434 3.789413e-05
+    ## 5:     XGBoost (tuned)     SIRS Benchmark  -0.0007707021 5.017663e-05
+    ## 6:     XGBoost (tuned) Logistic Regression -0.0006225587 4.002520e-05
     ##            lower         upper            p
     ##            <num>         <num>        <num>
     ## 1: -0.0001455749 -1.172723e-04 4.955362e-74
     ## 2: -0.0003582415 -2.008925e-04 3.291893e-12
-    ## 3: -0.0010067205 -8.180201e-04 4.176647e-80
+    ## 3: -0.0010052339 -7.990175e-04 6.467912e-66
     ## 4: -0.0002224145 -7.387225e-05 9.252493e-05
-    ## 5: -0.0008707494 -6.911440e-04 3.850604e-65
-    ## 6: -0.0007070220 -5.585847e-04 1.088941e-62
+    ## 5: -0.0008690465 -6.723577e-04 3.045885e-53
+    ## 6: -0.0007010067 -5.441108e-04 1.490749e-54
 
 ------------------------------------------------------------------------
 
@@ -1004,14 +963,11 @@ cal_plot_windowed(xgb_results, truth = SepsisLabel, .pred_1,
 # 10. Decision Curve Analysis (DCA)
 
 > - Evaluates clinical utility across a range of decision thresholds
->   (0-40%)
-> - Net benefit weighs true positives against false positives at each
->   threshold
 > - A model is useful if its curve sits above both “treat all” and
 >   “treat none”
 
 ``` r
-# DCA Curve
+# DCA Curve, madewith help from Claude
 dca_df <- test %>%
   select(SepsisLabel) %>%
   mutate(
@@ -1044,9 +1000,8 @@ dca(SepsisLabel ~ SIRS_Benchmark + Best_LogReg + XGBoost, data = dca_df, thresho
 
 # 11. Feature Importance - SHAP values
 
-> - SHAP values
-> - 16,000 test observations sampled
 > - Beeswarm plot
+> - 16,000 test observations
 
 ``` r
 # Baked test data using the recipe from the fitted workflow with 16000 samlpes
@@ -1074,9 +1029,8 @@ feature_names <- c(
   Lactate_obs_12h     = "Lactate Observations (12h)",
   Lactate_obs_6h      = "Lactate Observations (6h)",
   WBC                 = "White Blood Cell Count",
-  Temp_obs_6h         = "Temperature Observations (6h)",
+  Temp_obs_12h         = "Temperature Observations (12h)",
   HR                  = "Heart Rate",
-  HR_roll_mean_12     = "Heart Rate Rolling Mean (12h)",
   MAP_roll_mean_6     = "Mean Arterial Pressure Mean (6h)"
 )
 
@@ -1101,27 +1055,25 @@ sv_importance(shap_xgb, kind = "beeswarm") +
 # 11. Timing of detection ICULOS Bins
 
 ``` r
-#CLAUDE
 #creates 4 groups of ICULOS based on the test dataset
 test_df <- test %>%
   mutate(
-    iculos_bin        = cut(ICULOS, breaks = c(0, 6, 24, 72, Inf),
-                            labels = c("1-6h", "7-24h", "25-72h", ">72h"), right = TRUE),
-    SepsisLabel       = factor(SepsisLabel, levels = c("1", "0")),
-    prob_preds_xgb    = as.numeric(prob_preds_xgb$.pred_1),
+    iculos_bin = cut(ICULOS, breaks = c(0, 6, 24, 72, Inf), labels = c("1-6h", "7-24h", "25-72h", ">72h"), right = TRUE),
+    SepsisLabel = factor(SepsisLabel, levels = c("1", "0")),
+    prob_preds_xgb = as.numeric(prob_preds_xgb$.pred_1),
     prob_preds_sepsis = as.numeric(prob_preds_sepsis$.pred_1),
-    prob_preds_sirs   = as.numeric(prob_preds_sirs$.pred_1)
+    prob_preds_sirs = as.numeric(prob_preds_sirs$.pred_1)
   )
 
 # calc AUC per group with roc auc vec as it is in summarise
 auc_by_bin <- test_df %>%
   group_by(iculos_bin) %>%
   summarise(
-    XGBoost    = roc_auc_vec(SepsisLabel, prob_preds_xgb,    event_level = "first"),
-    Logistic   = roc_auc_vec(SepsisLabel, prob_preds_sepsis, event_level = "first"),
-    SIRS       = roc_auc_vec(SepsisLabel, prob_preds_sirs,   event_level = "first"),
+    XGBoost = roc_auc_vec(SepsisLabel, prob_preds_xgb,    event_level = "first"),
+    Logistic = roc_auc_vec(SepsisLabel, prob_preds_sepsis, event_level = "first"),
+    SIRS = roc_auc_vec(SepsisLabel, prob_preds_sirs,   event_level = "first"),
     n_positive = sum(SepsisLabel == "1"),
-    n_obs      = n()
+    n_obs = n()
   )
 
 auc_by_bin
@@ -1130,7 +1082,7 @@ auc_by_bin
     ## # A tibble: 4 × 6
     ##   iculos_bin XGBoost Logistic  SIRS n_positive  n_obs
     ##   <fct>        <dbl>    <dbl> <dbl>      <int>  <int>
-    ## 1 1-6h         0.760    0.679 0.596        673  44713
-    ## 2 7-24h        0.816    0.755 0.644       1791 133627
-    ## 3 25-72h       0.831    0.776 0.651       1855 118707
-    ## 4 >72h         0.669    0.609 0.592       1339  12639
+    ## 1 1-6h         0.758    0.679 0.596        673  44713
+    ## 2 7-24h        0.818    0.755 0.644       1791 133627
+    ## 3 25-72h       0.836    0.776 0.651       1855 118707
+    ## 4 >72h         0.664    0.609 0.592       1339  12639
