@@ -42,11 +42,7 @@ Thesis Project
 
 ------------------------------------------------------------------------
 
-> **Research question:** How well does a machine-learning and classical
-> statistical models trained on sepsis related data, predict the risk of
-> sepsis compared to a SIRS-based benchmark when evaluated in terms of
-> prediction accuracy, timing of detection, false alarm rates, and
-> clinical application using the PhysioNet Sepsis Challenge dataset?
+> **Research question:** how well do machine learning and classical statistical models trained on sepsis-related Intensive Care Unit (ICU) data, predict the risk of sepsis compared to a SIRS-based benchmark, when evaluated in terms of prediction accuracy, timing of detection, and clinical application
 
 ------------------------------------------------------------------------
 
